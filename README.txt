@@ -6,7 +6,6 @@ Bruce Jacob
 University of Maryland
 dramninjas [at] gmail [dot] com
 
-test test!
 
 1 About DRAMSim2 --------------------------------------------------------------------------------
 
