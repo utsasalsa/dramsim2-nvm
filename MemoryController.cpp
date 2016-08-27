@@ -42,20 +42,20 @@
 #define SEQUENTIAL(rank,bank) (rank*NUM_BANKS)+bank
 
 /* Power computations are localized to MemoryController.cpp */ 
-extern unsigned IDD0;
-extern unsigned IDD1;
-extern unsigned IDD2P;
-extern unsigned IDD2Q;
-extern unsigned IDD2N;
-extern unsigned IDD3Pf;
-extern unsigned IDD3Ps;
-extern unsigned IDD3N;
-extern unsigned IDD4W;
-extern unsigned IDD4R;
-extern unsigned IDD5;
-extern unsigned IDD6;
-extern unsigned IDD6L;
-extern unsigned IDD7;
+extern float IDD0;
+extern float IDD1;
+extern float IDD2P;
+extern float IDD2Q;
+extern float IDD2N;
+extern float IDD3Pf;
+extern float IDD3Ps;
+extern float IDD3N;
+extern float IDD4W;
+extern float IDD4R;
+extern float IDD5;
+extern float IDD6;
+extern float IDD6L;
+extern float IDD7;
 extern float Vdd; 
 
 using namespace DRAMSim;
@@ -96,10 +96,10 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 	refreshCountdown.reserve(NUM_RANKS);
 
 	//Power related packets
-	backgroundEnergy = vector <uint64_t >(NUM_RANKS,0);
-	burstEnergy = vector <uint64_t> (NUM_RANKS,0);
-	actpreEnergy = vector <uint64_t> (NUM_RANKS,0);
-	refreshEnergy = vector <uint64_t> (NUM_RANKS,0);
+	backgroundEnergy = vector <double >(NUM_RANKS,0);
+	burstEnergy = vector <double> (NUM_RANKS,0);
+	actpreEnergy = vector <double> (NUM_RANKS,0);
+	refreshEnergy = vector <double> (NUM_RANKS,0);
 
 	totalEpochLatency = vector<uint64_t> (NUM_RANKS*NUM_BANKS,0);
 
@@ -308,7 +308,7 @@ void MemoryController::update()
 					PRINT(" ++ Adding Read energy to total energy");
 				}
 				burstEnergy[rank] += (IDD4R - IDD3N) * BL/2 * NUM_DEVICES;
-				if (poppedBusPacket->busPacketType == READ_P) 
+				if (poppedBusPacket->busPacketType == READ_P)
 				{
 					//Don't bother setting next read or write times because the bank is no longer active
 					//bankStates[rank][bank].currentBankState = Idle;

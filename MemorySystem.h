@@ -54,7 +54,7 @@ class MemorySystem : public SimulatorObject
 {
 	ostream &dramsim_log;
 public:
-	//functions
+    //functions
 	MemorySystem(unsigned id, unsigned megsOfMemory, CSVWriter &csvOut_, ostream &dramsim_log_);
 	virtual ~MemorySystem();
 	void update();

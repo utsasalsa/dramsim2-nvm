@@ -142,6 +142,9 @@ extern std::string SCHEDULING_POLICY;
 extern std::string ADDRESS_MAPPING_SCHEME;
 extern std::string QUEUING_STRUCTURE;
 
+extern bool Restore_Flag;
+
+
 enum TraceType
 {
 	k6,

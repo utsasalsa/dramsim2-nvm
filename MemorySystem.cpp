@@ -61,10 +61,7 @@ MemorySystem::MemorySystem(unsigned id, unsigned int megsOfMemory, CSVWriter &cs
 		csvOut(csvOut_)
 {
 	currentClockCycle = 0;
-
 	DEBUG("===== MemorySystem "<<systemID<<" =====");
-
-
 	//calculate the total storage based on the devices the user selected and the number of
 
 	//calculate number of devices
@@ -196,7 +193,17 @@ bool MemorySystem::addTransaction(bool isWrite, uint64_t addr)
 
 bool MemorySystem::addTransaction(Transaction *trans)
 {
-	return memoryController->addTransaction(trans);
+	//return memoryController->addTransaction(trans);
+    
+    
+    memoryController->addTransaction(trans);
+    
+    if (trans->transactionType == DATA_READ && Restore_Flag){
+        Transaction *transRestore = new Transaction(DATA_WRITE,trans->address,NULL);
+        pendingTransactions.push_back(transRestore);
+    }
+    
+    return true;
 }
 
 //prints statistics
