@@ -308,7 +308,7 @@ void MemoryController::update()
 					PRINT(" ++ Adding Read energy to total energy");
 				}
 				burstEnergy[rank] += (IDD4R - IDD3N) * BL/2 * NUM_DEVICES;
-				if (poppedBusPacket->busPacketType == READ_P) 
+				if (poppedBusPacket->busPacketType == READ_P)
 				{
 					//Don't bother setting next read or write times because the bank is no longer active
 					//bankStates[rank][bank].currentBankState = Idle;
