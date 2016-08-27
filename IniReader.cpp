@@ -128,6 +128,8 @@ bool VERIFICATION_OUTPUT;
 
 bool DEBUG_INI_READER=false;
 
+bool Restore_Flag;
+
 namespace DRAMSim
 {
 RowBufferPolicy rowBufferPolicy;
@@ -188,6 +190,7 @@ static ConfigMap configMap[] =
 	DEFINE_UINT_PARAM(CMD_QUEUE_DEPTH,SYS_PARAM),
 
 	DEFINE_UINT_PARAM(EPOCH_LENGTH,SYS_PARAM),
+    DEFINE_BOOL_PARAM(Restore_Flag, SYS_PARAM),
 	//Power
 	DEFINE_BOOL_PARAM(USE_LOW_POWER,SYS_PARAM),
 
