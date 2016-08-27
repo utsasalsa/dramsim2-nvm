@@ -125,10 +125,10 @@ private:
 	
 public:
 	// energy values are per rank -- SST uses these directly, so make these public 
-	vector< uint64_t > backgroundEnergy;
-	vector< uint64_t > burstEnergy;
-	vector< uint64_t > actpreEnergy;
-	vector< uint64_t > refreshEnergy;
+	vector< double > backgroundEnergy;
+	vector< double > burstEnergy;
+	vector< double > actpreEnergy;
+	vector< double > refreshEnergy;
 
 };
 }
