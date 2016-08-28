@@ -847,19 +847,44 @@ void MemoryController::printStats(bool finalStats)
 	PRINT( " ============== Printing Statistics [id:"<<parentMemorySystem->systemID<<"]==============" );
 	PRINTN( "   Total Return Transactions : " << totalTransactions );
 	PRINT( " ("<<totalBytesTransferred <<" bytes) aggregate average bandwidth "<<totalBandwidth<<"GB/s");
+    
+    
+    csvOut.getOutputStream() << endl;
+    csvOut.getOutputStream() <<" =======================================================" << endl;
+    csvOut.getOutputStream() << " ============== Printing Statistics [id:"<<parentMemorySystem->systemID<<"]==============";
+    csvOut.getOutputStream() << "   Total Return Transactions : " << totalTransactions;
+    csvOut.getOutputStream() << " ("<<totalBytesTransferred <<" bytes) aggregate average bandwidth "<<totalBandwidth<<"GB/s";
+    
 
 	double totalAggregateBandwidth = 0.0;	
 	for (size_t r=0;r<NUM_RANKS;r++)
 	{
 
 		PRINT( "      -Rank   "<<r<<" : ");
+        
 		PRINTN( "        -Reads  : " << totalReadsPerRank[r]);
 		PRINT( " ("<<totalReadsPerRank[r] * bytesPerTransaction<<" bytes)");
 		PRINTN( "        -Writes : " << totalWritesPerRank[r]);
 		PRINT( " ("<<totalWritesPerRank[r] * bytesPerTransaction<<" bytes)");
+        
+        csvOut.getOutputStream() << endl;
+        csvOut.getOutputStream() <<"      -Rank   "<<r<<" : " << endl;
+        
+        csvOut.getOutputStream() <<"        -Reads  : " << totalReadsPerRank[r];
+        
+        csvOut.getOutputStream() <<" ("<<totalReadsPerRank[r] * bytesPerTransaction<<" bytes)" << endl;
+        
+        csvOut.getOutputStream() <<"        -Writes : " << totalWritesPerRank[r];
+        csvOut.getOutputStream() <<" ("<<totalWritesPerRank[r] * bytesPerTransaction<<" bytes)" << endl;
+        
 		for (size_t j=0;j<NUM_BANKS;j++)
 		{
 			PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
+            
+            csvOut.getOutputStream() << endl;
+            csvOut.getOutputStream() << "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns";
+            csvOut.getOutputStream() << endl;
+            
 		}
 
 		// factor of 1000 at the end is to account for the fact that totalEnergy is accumulated in mJ since IDD values are given in mA
@@ -880,6 +905,20 @@ void MemoryController::printStats(bool finalStats)
 		PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
 		PRINT( "     -Burst      (watts)     : " << burstPower[r]);
 		PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
+        
+        if (VIS_FILE_OUTPUT)
+        {
+            csvOut.getOutputStream() << endl;
+            csvOut.getOutputStream() << " == Power Data for Rank=" << r <<endl;
+            csvOut.getOutputStream() << " Average Power (watts)=" <<averagePower[r] <<endl;
+            csvOut.getOutputStream() << " -Background (watts)=" <<backgroundPower[r] <<endl;
+            csvOut.getOutputStream() << " -Act/Pre    (watts)=" <<actprePower[r] <<endl;
+            csvOut.getOutputStream() << " -Burst      (watts)=" <<burstPower[r] <<endl;
+            csvOut.getOutputStream() << " -Refresh    (watts)=" <<refreshPower[r] <<endl;
+            csvOut.getOutputStream() << endl;
+            
+        }
+        
 
 		if (VIS_FILE_OUTPUT)
 		{
@@ -900,12 +939,15 @@ void MemoryController::printStats(bool finalStats)
 			csvOut << CSVWriter::IndexedName("Rank_Aggregate_Bandwidth",myChannel,r) << totalRankBandwidth; 
 			csvOut << CSVWriter::IndexedName("Rank_Average_Bandwidth",myChannel,r) << totalRankBandwidth/NUM_RANKS; 
 		}
+        
+
 	}
 	if (VIS_FILE_OUTPUT)
 	{
 		csvOut << CSVWriter::IndexedName("Aggregate_Bandwidth",myChannel) << totalAggregateBandwidth;
 		csvOut << CSVWriter::IndexedName("Average_Bandwidth",myChannel) << totalAggregateBandwidth / (NUM_RANKS*NUM_BANKS);
 	}
+    
 
 	// only print the latency histogram at the end of the simulation since it clogs the output too much to print every epoch
 	if (finalStats)
