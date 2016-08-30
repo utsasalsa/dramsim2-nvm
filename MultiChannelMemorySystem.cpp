@@ -255,9 +255,14 @@ void MultiChannelMemorySystem::InitOutputFiles(string traceFilename)
 			{
 				queue = "pRankpBank";
 			}
-
+            string restore = "";
+            if (Restore_Flag) {
+                restore = "withRestore";
+            } else {
+                restore = "withoutRestore";
+            }
 			/* I really don't see how "the C++ way" is better than snprintf()  */
-			out << (TOTAL_STORAGE>>10) << "GB." << NUM_CHANS << "Ch." << NUM_RANKS <<"R." <<ADDRESS_MAPPING_SCHEME<<"."<<ROW_BUFFER_POLICY<<"."<< TRANS_QUEUE_DEPTH<<"TQ."<<CMD_QUEUE_DEPTH<<"CQ."<<sched<<"."<<queue;
+			out << (TOTAL_STORAGE>>10) << "GB." << NUM_CHANS << "Ch." << NUM_RANKS <<"R." <<ADDRESS_MAPPING_SCHEME<<"."<<ROW_BUFFER_POLICY<<"."<<restore<<"."<< TRANS_QUEUE_DEPTH<<"TQ."<<CMD_QUEUE_DEPTH<<"CQ."<<sched<<"."<<queue;
 		}
 		else //visFilename given
 		{
