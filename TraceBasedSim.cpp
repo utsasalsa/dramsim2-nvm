@@ -143,7 +143,7 @@ void usage()
 	cout << "\t-t, --tracefile=FILENAME \tspecify a tracefile to run  "<<endl;
 	cout << "\t-s, --systemini=FILENAME \tspecify an ini file that describes the memory system parameters  "<<endl;
 	cout << "\t-d, --deviceini=FILENAME \tspecify an ini file that describes the device-level parameters"<<endl;
-	cout << "\t-c, --numcycles=# \t\tspecify number of cycles to run the simulation for [default=30] "<<endl;
+	cout << "\t-c, --numcycles=# \t\tspecify number of cycles to run the simulation for [default=0] "<<endl;
 	cout << "\t-q, --quiet \t\t\tflag to suppress simulation output (except final stats) [default=no]"<<endl;
 	cout << "\t-o, --option=OPTION_A=234,tFAW=14\t\t\toverwrite any ini file option from the command line"<<endl;
 	cout << "\t-p, --pwd=DIRECTORY\t\tSet the working directory (i.e. usually DRAMSim directory where ini/ and results/ are)"<<endl;
@@ -381,7 +381,7 @@ int main(int argc, char **argv)
 	
 	IniReader::OverrideMap *paramOverrides = NULL; 
 
-	unsigned numCycles=1000;
+	unsigned numCycles=0;
 	//getopt stuff
 	while (1)
 	{
@@ -509,7 +509,9 @@ int main(int argc, char **argv)
 
 	MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, visFilename, paramOverrides);
 	// set the frequency ratio to 1:1
-	memorySystem->setCPUClockSpeed(0); 
+	//memorySystem->setCPUClockSpeed(0); 
+        // set the CPU frequence to 2GHz
+	memorySystem->setCPUClockSpeed(2000000000); 
 
 	// don't need this anymore 
 	delete paramOverrides;
@@ -541,7 +543,9 @@ int main(int argc, char **argv)
 		exit(0);
 	}
 
-	for (size_t i=0;i<numCycles;i++)
+        size_t i = 0;
+        if (numCycles > 0) {
+	for (i=0;i<numCycles;i++)
 	{
 		if (!pendingTrans)
 		{
@@ -602,9 +606,76 @@ int main(int argc, char **argv)
 
 		(*memorySystem).update();
 	}
+        } // if (numCycles > 0)
+        else { // run to the end of the trace
+	while (1)
+	{
+		if (!pendingTrans)
+		{
+			if (!traceFile.eof())
+			{
+				getline(traceFile, line);
+
+				if (line.size() > 0)
+				{
+					data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
+					trans = new Transaction(transType, addr, data);
+					alignTransactionAddress(*trans); 
+
+					if (i>=clockCycle)
+					{
+						if (!(*memorySystem).addTransaction(trans))
+						{
+							pendingTrans = true;
+						}
+						else
+						{
+#ifdef RETURN_TRANSACTIONS
+							transactionReceiver.add_pending(trans, i); 
+#endif
+							// the memory system accepted our request so now it takes ownership of it
+							trans = NULL; 
+						}
+					}
+					else
+					{
+						pendingTrans = true;
+					}
+				}
+				else
+				{
+					DEBUG("WARNING: Skipping line "<<lineNumber<< " ('" << line << "') in tracefile");
+				}
+				lineNumber++;
+			}
+			else
+			{
+				//we're out of trace, set pending=false and let the thing spin without adding transactions
+				pendingTrans = false; 
+                                break;
+			}
+		}
+
+		else if (pendingTrans && i >= clockCycle)
+		{
+			pendingTrans = !(*memorySystem).addTransaction(trans);
+			if (!pendingTrans)
+			{
+#ifdef RETURN_TRANSACTIONS
+				transactionReceiver.add_pending(trans, i); 
+#endif
+				trans=NULL;
+			}
+		}
+
+		(*memorySystem).update();
+                i++;
+	}
+        }
 
 	traceFile.close();
 	memorySystem->printStats(true);
+        cout << "Total number of memory cycles: " << i << endl;
 	// make valgrind happy
 	if (trans)
 	{
