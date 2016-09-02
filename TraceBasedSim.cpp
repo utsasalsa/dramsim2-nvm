@@ -479,7 +479,7 @@ int main(int argc, char **argv)
     // set the frequency ratio to 1:1
     //memorySystem->setCPUClockSpeed(0);
     // set the CPU frequence to 2GHz
-    memorySystem->setCPUClockSpeed(2000000000);
+    memorySystem->setCPUClockSpeed(2147483648);
     
     // don't need this anymore
     delete paramOverrides;
@@ -618,7 +618,7 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    //we're out of trace, set pending=false and let the thing spin without adding transactions
+                    //we're out of trace, break and terminate the simulation.
                     pendingTrans = false; 
                     break;
                 }

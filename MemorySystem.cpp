@@ -193,17 +193,14 @@ bool MemorySystem::addTransaction(bool isWrite, uint64_t addr)
 
 bool MemorySystem::addTransaction(Transaction *trans)
 {
-	//return memoryController->addTransaction(trans);
+    bool result = memoryController->addTransaction(trans);
     
-    
-    memoryController->addTransaction(trans);
-    
-    if (trans->transactionType == DATA_READ && Restore_Flag){
-        Transaction *transRestore = new Transaction(DATA_WRITE,trans->address,NULL);
+    if (Restore_Flag && result && trans->transactionType == DATA_READ){
+        Transaction *transRestore = new Transaction(DATA_WRITE, trans->address, trans->data);
         pendingTransactions.push_back(transRestore);
     }
     
-    return true;
+    return result;
 }
 
 //prints statistics
