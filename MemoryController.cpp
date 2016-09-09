@@ -924,6 +924,13 @@ void MemoryController::printStats(bool finalStats)
         if (VIS_FILE_OUTPUT)
         {
             csvOut.getOutputStream() << endl;
+            csvOut.getOutputStream() << "Total Energy       : " << backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r] << endl;
+            csvOut.getOutputStream() << "Background Energy      : "<< backgroundEnergy[r] << endl;
+            csvOut.getOutputStream() << "Act/Pre Energy     : " << actpreEnergy[r] << endl;
+            csvOut.getOutputStream() << "Burst Energy       : " << burstEnergy[r] << endl;
+            csvOut.getOutputStream() <<"Refresh Energy      : " << refreshEnergy[r] << endl;
+            
+            csvOut.getOutputStream() << endl;
             csvOut.getOutputStream() << " == Power Data for Rank=" << r <<endl;
             csvOut.getOutputStream() << " Average Power (watts)=" <<averagePower[r] <<endl;
             csvOut.getOutputStream() << " -Background (watts)=" <<backgroundPower[r] <<endl;
