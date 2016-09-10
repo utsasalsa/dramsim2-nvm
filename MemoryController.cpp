@@ -791,7 +791,8 @@ void MemoryController::resetStats()
             totalWritesPerBank[SEQUENTIAL(i,j)] = 0;
             totalEpochLatency[SEQUENTIAL(i,j)] = 0;
         }
-        
+
+        // comment out resetting energy after each epoch so that we can get the overall energy at the end of simulation
         //burstEnergy[i] = 0;
         //actpreEnergy[i] = 0;
         //refreshEnergy[i] = 0;

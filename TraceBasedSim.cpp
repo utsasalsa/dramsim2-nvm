@@ -643,7 +643,7 @@ int main(int argc, char **argv)
     
     traceFile.close();
     memorySystem->printStats(true);
-    cout << "Total number of memory cycles: " << i << endl;
+    cout << "Total number of CPU cycles: " << i << endl;
     // make valgrind happy
     if (trans)
     {
