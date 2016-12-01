@@ -511,6 +511,9 @@ int main(int argc, char **argv)
         exit(0);
     }
     
+    uint64_t previousTransactionAddress = -1;
+    TransactionType previousTransactionType = RETURN_DATA;
+    
     size_t i = 0;
     if (numCycles > 0) {
         for (i=0;i<numCycles;i++)
@@ -525,7 +528,12 @@ int main(int argc, char **argv)
                     {
                         data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
                         trans = new Transaction(transType, addr, data);
-                        alignTransactionAddress(*trans); 
+                        
+                        if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
+                        {
+                            trans->restoreWrite = true;
+                        }
+                        alignTransactionAddress(*trans);
                         
                         if (i>=clockCycle)
                         {
@@ -538,6 +546,9 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                                 transactionReceiver.add_pending(trans, i); 
 #endif
+                                
+                                previousTransactionAddress = trans->address;
+                                previousTransactionType = trans->transactionType;
                                 // the memory system accepted our request so now it takes ownership of it
                                 trans = NULL; 
                             }
@@ -568,6 +579,8 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                     transactionReceiver.add_pending(trans, i); 
 #endif
+                    previousTransactionAddress = trans->address;
+                    previousTransactionType = trans->transactionType;
                     trans=NULL;
                 }
             }
@@ -588,7 +601,12 @@ int main(int argc, char **argv)
                     {
                         data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
                         trans = new Transaction(transType, addr, data);
-                        alignTransactionAddress(*trans); 
+                        
+                        if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
+                        {
+                            trans->restoreWrite = true;
+                        }
+                        alignTransactionAddress(*trans);
                         
                         if (i>=clockCycle)
                         {
@@ -601,6 +619,8 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                                 transactionReceiver.add_pending(trans, i); 
 #endif
+                                previousTransactionAddress = trans->address;
+                                previousTransactionType = trans->transactionType;
                                 // the memory system accepted our request so now it takes ownership of it
                                 trans = NULL; 
                             }
@@ -632,6 +652,8 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                     transactionReceiver.add_pending(trans, i); 
 #endif
+                    previousTransactionAddress = trans->address;
+                    previousTransactionType = trans->transactionType;
                     trans=NULL;
                 }
             }

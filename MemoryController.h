@@ -68,8 +68,7 @@ public:
 	void update();
 	void printStats(bool finalStats = false);
 	void resetStats(); 
-
-
+    
 	//fields
 	vector<Transaction *> transactionQueue;
 private:
@@ -92,7 +91,8 @@ private:
 	vector<bool> powerDown;
 
 	vector<Rank *> *ranks;
-
+    
+    BusPacketType packetType;
 	//output file
 	CSVWriter &csvOut; 
 
@@ -122,8 +122,16 @@ private:
 
 
 	unsigned refreshRank;
-	
+    bool prechargeFlag;
+    
+    unsigned unifiedNumberOfOpenPageSwitching;
+    unsigned unifiedNumberOfClosePageSwitching;
+    
+    vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
+    vector< vector<unsigned> > distributedNumberOfClosePageSwitching;
+    
 public:
+    
 	// energy values are per rank -- SST uses these directly, so make these public 
 	vector< double > backgroundEnergy;
 	vector< double > burstEnergy;

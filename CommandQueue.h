@@ -73,12 +73,22 @@ public:
 	void needRefresh(unsigned rank);
 	void print();
 	void update(); //SimulatorObject requirement
+    void hit(BusPacket *busPacket);
+    void bankAccess(BusPacket *buspacket);
 	vector<BusPacket *> &getCommandQueue(unsigned rank, unsigned bank);
-
+    
+    //For sake of changing the page policy
+    void enqueuePrecharge(unsigned rank, unsigned bank);
+    //bool enqueueFlag;
 	//fields
 	
 	BusPacket3D queues; // 3D array of BusPacket pointers
 	vector< vector<BankState> > &bankStates;
+    vector< vector<unsigned> > bankHitCounters;
+    vector< vector<unsigned> > bankAccessCounters;
+    vector< vector<RowBufferPolicy> > bankRowBufferPolicy;
+    
+    
 private:
 	void nextRankAndBank(unsigned &rank, unsigned &bank);
 	//fields
@@ -95,6 +105,11 @@ private:
 	vector< vector<unsigned> > rowAccessCounters;
 
 	bool sendAct;
+    
+    //bool rowIdleForClosePagePolicy;
+    vector< vector<bool> > rowIdleProblemForClosePagePolicy;
+    //bool rowActiveForClosePagePolicy;
+    vector< vector<bool> > rowActiveProblemForClosePagePolicy;
 };
 }
 

@@ -240,6 +240,16 @@ void Rank::receiveFromBus(BusPacket *packet)
 		break;
 	case PRECHARGE:
 		//make sure precharge is allowed
+            /*
+            PRINT("Rank state next activate = " << bankStates[packet->bank].nextPrecharge);
+            PRINT("Current clock cycle in rank = " << currentClockCycle);
+            PRINT("Current rank state = " << bankStates[packet->bank].currentBankState);
+            if (bankStates[packet->bank].currentBankState == RowActive)
+            {
+                PRINT("rank is active");
+            }
+             */
+             
 		if (bankStates[packet->bank].currentBankState != RowActive ||
 		        currentClockCycle < bankStates[packet->bank].nextPrecharge)
 		{

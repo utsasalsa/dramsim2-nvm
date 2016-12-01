@@ -67,7 +67,10 @@ commandQueue(bankStates, dramsim_log_),
 poppedBusPacket(NULL),
 csvOut(csvOut_),
 totalTransactions(0),
-refreshRank(0)
+refreshRank(0),
+prechargeFlag(false),
+unifiedNumberOfOpenPageSwitching(0),
+unifiedNumberOfClosePageSwitching(0)
 {
     //get handle on parent
     parentMemorySystem = parent;
@@ -108,6 +111,9 @@ refreshRank(0)
     {
         refreshCountdown.push_back((int)((REFRESH_PERIOD/tCK)/NUM_RANKS)*(i+1));
     }
+    
+    distributedNumberOfOpenPageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
+    distributedNumberOfClosePageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
 }
 
 //get a bus packet from either data or cmd bus
@@ -177,7 +183,6 @@ void MemoryController::update()
                             bankStates[i][j].lastCommand = PRECHARGE;
                             bankStates[i][j].stateChangeCountdown = tRP;
                             break;
-                            
                         case REFRESH:
                         case PRECHARGE:
                             bankStates[i][j].currentBankState = Idle;
@@ -283,6 +288,8 @@ void MemoryController::update()
     //function returns true if there is something valid in poppedBusPacket
     if (commandQueue.pop(&poppedBusPacket))
     {
+        //PRINT("current packet type = " << poppedBusPacket->busPacketType);
+        packetType = poppedBusPacket->busPacketType;
         if (poppedBusPacket->busPacketType == WRITE || poppedBusPacket->busPacketType == WRITE_P)
         {
             
@@ -300,6 +307,7 @@ void MemoryController::update()
         unsigned bank = poppedBusPacket->bank;
         switch (poppedBusPacket->busPacketType)
         {
+            
             case READ_P:
             case READ:
                 //add energy to account for total
@@ -540,8 +548,6 @@ void MemoryController::update()
                                                newTransactionColumn, newTransactionRow, newTransactionRank,
                                                newTransactionBank, transaction->data, dramsim_log);
             
-            
-            
             commandQueue.enqueue(ACTcommand);
             commandQueue.enqueue(command);
             
@@ -563,6 +569,21 @@ void MemoryController::update()
              */
             break;
         }
+        /*
+        else if (!commandQueue.enqueueFlag)
+        {
+            for (size_t i=0; i<NUM_RANKS; i++)
+            {
+                for (size_t j=0; j<NUM_BANKS; j++)
+                {
+                    BusPacket *PrechargeBusPacket = new BusPacket(PRECHARGE, 0, 0, 0, i, j, 0, dramsim_log);
+                    commandQueue.enqueue(PrechargeBusPacket);
+                    //commandQueue.enqueuePrecharge(i, j);
+                }
+            }
+            commandQueue.enqueueFlag = true;
+        }
+         */
         else // no room, do nothing this cycle
         {
             //PRINT( "== Warning - No room in command queue" << endl;
@@ -781,6 +802,104 @@ bool MemoryController::addTransaction(Transaction *trans)
 
 void MemoryController::resetStats()
 {
+    double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
+    //double threshold = ((double)(tRP) / (double)(tRP + tRCD));
+    //threshold = 0;
+    if (HYBRID_PAGE_POLICY_FLAG)
+    {
+        if (DISTRIBUTED_PAGE_POLICY_FLAG)
+        {
+            PRINT("Threshold = " << threshold);
+            for (size_t i=0; i<NUM_RANKS; i++)
+            {
+                for (size_t j=0; j<NUM_BANKS; j++)
+                {
+                    PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
+                    PRINT("commandQueue.bankAccessCounters = " << (double)commandQueue.bankAccessCounters[i][j]);
+                    PRINT("Current bank states "<<bankStates[i][j].currentBankState);
+                    PRINT("last command = " << bankStates[i][j].lastCommand);
+                    PRINT("current command = " << packetType);
+                    
+                    if ((double)commandQueue.bankHitCounters[i][j]/(double)commandQueue.bankAccessCounters[i][j] >= threshold)
+                    {
+                        // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
+                        if (commandQueue.bankRowBufferPolicy[i][j] == ClosePage)
+                        {
+                            distributedNumberOfOpenPageSwitching[i][j]++;
+                        }
+                        commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
+                        PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
+                    }
+                    else
+                    {
+                        // the conditional statement counts the number of close page switching of a command queue if the last page policy was open page
+                        if (commandQueue.bankRowBufferPolicy[i][j] == OpenPage)
+                        {
+                            distributedNumberOfClosePageSwitching[i][j]++;
+                        }
+                        commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
+                        PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
+                    }
+                }
+            }
+        }
+        else
+        {
+            // As we have unified page policy for all command queues, therefore, we count
+            // how many command queues favor open page and how many command queues favor close page.
+            // After that, we compare the two numbers and decide which page policy should be chosen.
+            int openPageHits = 0;
+            int closePageHits = 0;
+            PRINT("Threshold = " << threshold);
+            
+            for (size_t i=0; i<NUM_RANKS; i++)
+            {
+                for (size_t j=0; j<NUM_BANKS; j++)
+                {
+                    
+                    if (commandQueue.bankAccessCounters[i][j] == 0)
+                    {
+                        //closePageHits++;
+                        continue;
+                    }
+                    //PRINT("commandQueue.bankHitCounters = " << commandQueue.bankHitCounters[i][j]);
+                    //PRINT("commandQueue.bankAccessCounters = " << commandQueue.bankAccessCounters[i][j]);
+                    if ((double)commandQueue.bankHitCounters[i][j]/(double)commandQueue.bankAccessCounters[i][j] >= threshold)
+                    {
+                        openPageHits++;
+                    }
+                    else
+                    {
+                        closePageHits++;
+                    }
+                }
+            }
+            
+            if (closePageHits > openPageHits)
+            {
+                // the conditional statement counts the number of close page switching if the last page policy was open page
+                if (rowBufferPolicy == OpenPage)
+                {
+                    unifiedNumberOfClosePageSwitching++;
+                }
+                rowBufferPolicy = ClosePage;
+                PRINT("Row Buffer Policy is Close Page");
+            }
+            else
+            {
+                // the conditional statement counts the number of open page switching if the last page policy was close page
+                if (rowBufferPolicy == ClosePage)
+                {
+                    unifiedNumberOfOpenPageSwitching++;
+                }
+                rowBufferPolicy = OpenPage;
+                PRINT("Row Buffer Policy is Open Page");
+            }
+
+        }
+    }
+
+    
     for (size_t i=0; i<NUM_RANKS; i++)
     {
         for (size_t j=0; j<NUM_BANKS; j++)
@@ -790,8 +909,12 @@ void MemoryController::resetStats()
             totalReadsPerBank[SEQUENTIAL(i,j)] = 0;
             totalWritesPerBank[SEQUENTIAL(i,j)] = 0;
             totalEpochLatency[SEQUENTIAL(i,j)] = 0;
+            
+            commandQueue.bankHitCounters[i][j] = 0;
+            commandQueue.bankAccessCounters[i][j] = 0;
+            
         }
-
+        
         // comment out resetting energy after each epoch so that we can get the overall energy at the end of simulation
         //burstEnergy[i] = 0;
         //actpreEnergy[i] = 0;
@@ -801,6 +924,7 @@ void MemoryController::resetStats()
         //totalWritesPerRank[i] = 0;
     }
 }
+
 //prints statistics at the end of an epoch or  simulation
 void MemoryController::printStats(bool finalStats)
 {

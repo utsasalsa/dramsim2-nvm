@@ -48,7 +48,8 @@ enum BusPacketType
 	ACTIVATE,
 	PRECHARGE,
 	REFRESH,
-	DATA
+	DATA,
+    WRITE_RESTORE
 };
 
 class BusPacket
@@ -71,6 +72,8 @@ public:
 	void print();
 	void print(uint64_t currentClockCycle, bool dataStart);
 	void printData() const;
+    
+    bool hasBeenAccessed;
 
 };
 }

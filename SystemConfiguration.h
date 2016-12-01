@@ -126,6 +126,9 @@ extern unsigned NUM_DEVICES;
 #define WRITE_AUTOPRE_DELAY (WL+BL/2+tWR+tRP)
 #define WRITE_TO_READ_DELAY_B (WL+BL/2+tWTR) //interbank
 #define WRITE_TO_READ_DELAY_R (WL+BL/2+tRTRS-RL) //interrank
+#define RESTORE_PAGE tRC
+#define RESTORE_LINE tRAS
+#define THRESHOLD ((tRP + RESTORE_PAGE - RESTORE_LINE) / (tRP + tRCD + RESTORE_PAGE))
 
 extern unsigned JEDEC_DATA_BUS_BITS;
 
@@ -143,6 +146,8 @@ extern std::string ADDRESS_MAPPING_SCHEME;
 extern std::string QUEUING_STRUCTURE;
 
 extern bool Restore_Flag;
+extern bool HYBRID_PAGE_POLICY_FLAG;
+extern bool DISTRIBUTED_PAGE_POLICY_FLAG;
 
 
 enum TraceType
@@ -196,6 +201,8 @@ extern RowBufferPolicy rowBufferPolicy;
 extern SchedulingPolicy schedulingPolicy;
 extern AddressMappingScheme addressMappingScheme;
 extern QueuingStructure queuingStructure;
+extern std::vector< std::vector<RowBufferPolicy> > bankRowBufferPolicy;
+
 //
 //FUNCTIONS
 //

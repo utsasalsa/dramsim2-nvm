@@ -55,7 +55,8 @@ BusPacket::BusPacket(BusPacketType packtype, uint64_t physicalAddr,
 	bank(b),
 	rank(r),
 	physicalAddress(physicalAddr),
-	data(dat)
+	data(dat),
+    hasBeenAccessed(false)
 {}
 
 void BusPacket::print(uint64_t currentClockCycle, bool dataStart)
