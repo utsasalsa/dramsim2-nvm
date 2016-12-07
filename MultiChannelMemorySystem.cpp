@@ -258,8 +258,16 @@ void MultiChannelMemorySystem::InitOutputFiles(string traceFilename)
             string restore = "";
             if (Restore_Flag) {
                 restore = "withRestore";
-            } else {
+            }
+            else
+            {
                 restore = "withoutRestore";
+            }
+            
+            string hybridPagePolicy = "";
+            if (HYBRID_PAGE_POLICY_FLAG)
+            {
+                ROW_BUFFER_POLICY = "hybridPage";
             }
 			/* I really don't see how "the C++ way" is better than snprintf()  */
 			out << (TOTAL_STORAGE>>10) << "GB." << NUM_CHANS << "Ch." << NUM_RANKS <<"R." <<ADDRESS_MAPPING_SCHEME<<"."<<ROW_BUFFER_POLICY<<"."<<restore<<"."<< TRANS_QUEUE_DEPTH<<"TQ."<<CMD_QUEUE_DEPTH<<"CQ."<<sched<<"."<<queue;

@@ -15,6 +15,8 @@
 #include "MultiChannelMemorySystem.h"
 #include "Transaction.h"
 #include "IniReader.h"
+#include "CSVWriter.h"
+#include "MemoryController.h"
 
 
 using namespace DRAMSim;
@@ -666,6 +668,7 @@ int main(int argc, char **argv)
     traceFile.close();
     memorySystem->printStats(true);
     cout << "Total number of CPU cycles: " << i << endl;
+    
     // make valgrind happy
     if (trans)
     {

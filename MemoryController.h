@@ -71,6 +71,8 @@ public:
     
 	//fields
 	vector<Transaction *> transactionQueue;
+    CSVWriter &csvOut;
+    unsigned clockCounter;
 private:
 	ostream &dramsim_log;
 	vector< vector <BankState> > bankStates;
@@ -94,7 +96,7 @@ private:
     
     BusPacketType packetType;
 	//output file
-	CSVWriter &csvOut; 
+
 
 	// these packets are counting down waiting to be transmitted on the "bus"
 	BusPacket *outgoingCmdPacket;
@@ -129,6 +131,8 @@ private:
     
     vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
     vector< vector<unsigned> > distributedNumberOfClosePageSwitching;
+    uint64_t totalClosePageTransactions;
+    uint64_t totalOpenPageTransactions;
     
 public:
     

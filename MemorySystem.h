@@ -79,9 +79,10 @@ public:
 	//TODO: make this a functor as well?
 	static powerCallBack_t ReportPower;
 	unsigned systemID;
-
+    CSVWriter &csvOut;
+    
 private:
-	CSVWriter &csvOut;
+	
 };
 }
 

@@ -70,7 +70,9 @@ totalTransactions(0),
 refreshRank(0),
 prechargeFlag(false),
 unifiedNumberOfOpenPageSwitching(0),
-unifiedNumberOfClosePageSwitching(0)
+unifiedNumberOfClosePageSwitching(0),
+totalClosePageTransactions(0),
+totalOpenPageTransactions(0)
 {
     //get handle on parent
     parentMemorySystem = parent;
@@ -218,7 +220,6 @@ void MemoryController::update()
             {
                 (*parentMemorySystem->WriteDataDone)(parentMemorySystem->systemID,outgoingDataPacket->physicalAddress, currentClockCycle);
             }
-            
             (*ranks)[outgoingDataPacket->rank]->receiveFromBus(outgoingDataPacket);
             outgoingDataPacket=NULL;
         }
@@ -298,7 +299,15 @@ void MemoryController::update()
                                                     poppedBusPacket->data, dramsim_log));
             writeDataCountdown.push_back(WL);
         }
-        
+        //Count the fraction of open page and close page transactions
+        if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == OpenPage)
+        {
+            totalOpenPageTransactions++;
+        }
+        else if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
+        {
+            totalClosePageTransactions++;
+        }
         //
         //update each bank's state based on the command that was just popped out of the command queue
         //
@@ -316,21 +325,47 @@ void MemoryController::update()
                     PRINT(" ++ Adding Read energy to total energy");
                 }
                 burstEnergy[rank] += (IDD4R - IDD3N) * BL/2 * NUM_DEVICES;
-                if (poppedBusPacket->busPacketType == READ_P)
+                if (!HYBRID_PAGE_POLICY_FLAG)
                 {
-                    //Don't bother setting next read or write times because the bank is no longer active
-                    //bankStates[rank][bank].currentBankState = Idle;
-                    bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
-                                                              bankStates[rank][bank].nextActivate);
-                    bankStates[rank][bank].lastCommand = READ_P;
-                    bankStates[rank][bank].stateChangeCountdown = READ_TO_PRE_DELAY;
+                    if (poppedBusPacket->busPacketType == READ_P)
+                    //if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
+                    {
+                        //Don't bother setting next read or write times because the bank is no longer active
+                        //bankStates[rank][bank].currentBankState = Idle;
+                        bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
+                                                                  bankStates[rank][bank].nextActivate);
+                        bankStates[rank][bank].lastCommand = READ_P;
+                        bankStates[rank][bank].stateChangeCountdown = READ_TO_PRE_DELAY;
+                    }
+                    else if (poppedBusPacket->busPacketType == READ)
+                    //else if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == OpenPage)
+                    {
+                        bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
+                                                                   bankStates[rank][bank].nextPrecharge);
+                        bankStates[rank][bank].lastCommand = READ;
+                        
+                    }
                 }
-                else if (poppedBusPacket->busPacketType == READ)
+                else
                 {
-                    bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
-                                                               bankStates[rank][bank].nextPrecharge);
-                    bankStates[rank][bank].lastCommand = READ;
-                    
+                    //if (poppedBusPacket->busPacketType == READ_P)
+                    if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
+                    {
+                        //Don't bother setting next read or write times because the bank is no longer active
+                        //bankStates[rank][bank].currentBankState = Idle;
+                        bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
+                                                                  bankStates[rank][bank].nextActivate);
+                        bankStates[rank][bank].lastCommand = READ_P;
+                        bankStates[rank][bank].stateChangeCountdown = READ_TO_PRE_DELAY;
+                    }
+                    //else if (poppedBusPacket->busPacketType == READ)
+                    else if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == OpenPage)
+                    {
+                        bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
+                                                                   bankStates[rank][bank].nextPrecharge);
+                        bankStates[rank][bank].lastCommand = READ;
+                        
+                    }
                 }
                 
                 for (size_t i=0;i<NUM_RANKS;i++)
@@ -356,7 +391,8 @@ void MemoryController::update()
                     }
                 }
                 
-                if (poppedBusPacket->busPacketType == READ_P)
+                //if (poppedBusPacket->busPacketType == READ_P)
+                if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
                 {
                     //set read and write to nextActivate so the state table will prevent a read or write
                     //  being issued (in cq.isIssuable())before the bank state has been changed because of the
@@ -368,18 +404,50 @@ void MemoryController::update()
                 break;
             case WRITE_P:
             case WRITE:
-                if (poppedBusPacket->busPacketType == WRITE_P)
+                if (!HYBRID_PAGE_POLICY_FLAG)
                 {
-                    bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
-                                                              bankStates[rank][bank].nextActivate);
-                    bankStates[rank][bank].lastCommand = WRITE_P;
-                    bankStates[rank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
+                    /*
+                    if (poppedBusPacket->restoreWrite == true)
+                    {
+                        break;
+                    }
+                     */
+                    if (poppedBusPacket->busPacketType == WRITE_P)
+                    {
+                        bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
+                                                                  bankStates[rank][bank].nextActivate);
+                        bankStates[rank][bank].lastCommand = WRITE_P;
+                        bankStates[rank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
+                    }
+                    else if (poppedBusPacket->busPacketType == WRITE)
+                    {
+                        bankStates[rank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
+                                                                   bankStates[rank][bank].nextPrecharge);
+                        bankStates[rank][bank].lastCommand = WRITE;
+                    }
+
                 }
-                else if (poppedBusPacket->busPacketType == WRITE)
+                else
                 {
-                    bankStates[rank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
-                                                               bankStates[rank][bank].nextPrecharge);
-                    bankStates[rank][bank].lastCommand = WRITE;
+                    if (DISTRIBUTED_PAGE_POLICY_FLAG)
+                    {
+                        //if (poppedBusPacket->busPacketType == WRITE_P)
+                        if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
+                        {
+                            bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
+                                                                      bankStates[rank][bank].nextActivate);
+                            bankStates[rank][bank].lastCommand = WRITE_P;
+                            bankStates[rank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
+                        }
+                        //else if (poppedBusPacket->busPacketType == WRITE)
+                        else if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == OpenPage)
+                            
+                        {
+                            bankStates[rank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
+                                                                       bankStates[rank][bank].nextPrecharge);
+                            bankStates[rank][bank].lastCommand = WRITE;
+                        }
+                    }
                 }
                 
                 
@@ -415,11 +483,32 @@ void MemoryController::update()
                 //set read and write to nextActivate so the state table will prevent a read or write
                 //  being issued (in cq.isIssuable())before the bank state has been changed because of the
                 //  auto-precharge associated with this command
-                if (poppedBusPacket->busPacketType == WRITE_P)
+                /*
+                 if (poppedBusPacket->busPacketType == WRITE_P)
+                 
+                 {
+                 bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
+                 bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
+                 }
+                 */
+                if (!HYBRID_PAGE_POLICY_FLAG)
                 {
-                    bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
-                    bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
+                    if (poppedBusPacket->busPacketType == WRITE_P)                        
+                    {
+                        bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
+                        bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
+                    }
                 }
+                else
+                {
+                    if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
+                    
+                    {
+                        bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
+                        bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
+                    }
+                }
+
                 
                 break;
             case ACTIVATE:
@@ -547,7 +636,12 @@ void MemoryController::update()
             BusPacket *command = new BusPacket(bpType, transaction->address,
                                                newTransactionColumn, newTransactionRow, newTransactionRank,
                                                newTransactionBank, transaction->data, dramsim_log);
-            
+            /*
+            if (transaction->restoreWrite == true && (command->busPacketType == WRITE || command->busPacketType == WRITE_P))
+            {
+                command->restoreWrite = true;
+            }
+             */
             commandQueue.enqueue(ACTcommand);
             commandQueue.enqueue(command);
             
@@ -802,11 +896,15 @@ bool MemoryController::addTransaction(Transaction *trans)
 
 void MemoryController::resetStats()
 {
-    double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
+
     //double threshold = ((double)(tRP) / (double)(tRP + tRCD));
     //threshold = 0;
     if (HYBRID_PAGE_POLICY_FLAG)
     {
+        double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
+        
+        PRINT("Total open page transactions = " << totalOpenPageTransactions);
+        PRINT("Total close page transactions = " << totalClosePageTransactions);
         if (DISTRIBUTED_PAGE_POLICY_FLAG)
         {
             PRINT("Threshold = " << threshold);
@@ -814,11 +912,11 @@ void MemoryController::resetStats()
             {
                 for (size_t j=0; j<NUM_BANKS; j++)
                 {
-                    PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
-                    PRINT("commandQueue.bankAccessCounters = " << (double)commandQueue.bankAccessCounters[i][j]);
-                    PRINT("Current bank states "<<bankStates[i][j].currentBankState);
-                    PRINT("last command = " << bankStates[i][j].lastCommand);
-                    PRINT("current command = " << packetType);
+                    //PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
+                    //PRINT("commandQueue.bankAccessCounters = " << (double)commandQueue.bankAccessCounters[i][j]);
+                    //PRINT("Current bank states "<<bankStates[i][j].currentBankState);
+                    //PRINT("last command = " << bankStates[i][j].lastCommand);
+                    //PRINT("current command = " << packetType);
                     
                     if ((double)commandQueue.bankHitCounters[i][j]/(double)commandQueue.bankAccessCounters[i][j] >= threshold)
                     {
@@ -1063,6 +1161,27 @@ void MemoryController::printStats(bool finalStats)
             csvOut.getOutputStream() << " -Burst      (watts)=" <<burstPower[r] <<endl;
             csvOut.getOutputStream() << " -Refresh    (watts)=" <<refreshPower[r] <<endl;
             csvOut.getOutputStream() << endl;
+            
+            if (HYBRID_PAGE_POLICY_FLAG)
+            {
+                if (DISTRIBUTED_PAGE_POLICY_FLAG)
+                {
+                    /*
+                    // they are vectors
+                    csvOut.getOutputStream() << " Number of Open Page switching= " << distributedNumberOfOpenPageSwitching <<endl;
+                    csvOut.getOutputStream() << " Number of Close Page switching=" << distributedNumberOfClosePageSwitching <<endl;
+                    csvOut.getOutputStream() << endl;
+                     */
+                }
+                else
+                {
+                    csvOut.getOutputStream() << " Number of Open Page switching= " << unifiedNumberOfOpenPageSwitching <<endl;
+                    csvOut.getOutputStream() << " Number of Close Page switching=" << unifiedNumberOfClosePageSwitching <<endl;
+                    csvOut.getOutputStream() << endl;
+                }
+            }
+
+            
             
         }
         

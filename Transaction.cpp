@@ -47,7 +47,9 @@ Transaction::Transaction(TransactionType transType, uint64_t addr, void *dat) :
 	transactionType(transType),
 	address(addr),
 	data(dat)
-{}
+{
+    restoreWrite = false;
+}
     
 Transaction::Transaction(TransactionType transType, uint64_t addr, void *dat, bool restore) :
     transactionType(transType),

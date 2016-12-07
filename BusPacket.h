@@ -48,8 +48,7 @@ enum BusPacketType
 	ACTIVATE,
 	PRECHARGE,
 	REFRESH,
-	DATA,
-    WRITE_RESTORE
+	DATA
 };
 
 class BusPacket
@@ -65,6 +64,8 @@ public:
 	unsigned rank;
 	uint64_t physicalAddress;
 	void *data;
+    
+    bool restoreWrite;
 
 	//Functions
 	BusPacket(BusPacketType packtype, uint64_t physicalAddr, unsigned col, unsigned rw, unsigned r, unsigned b, void *dat, ostream &dramsim_log_);

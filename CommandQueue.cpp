@@ -87,6 +87,7 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
     rowIdleProblemForClosePagePolicy = vector< vector<bool> >(NUM_RANKS, vector<bool>(NUM_BANKS,false));
     
     rowActiveProblemForClosePagePolicy = vector< vector<bool> >(NUM_RANKS, vector<bool>(NUM_BANKS,false));
+    readWriteRowActiveProblemForClosePagePolicy = vector< vector<bool> >(NUM_RANKS, vector<bool>(NUM_BANKS,false));
     
 	//create queue based on the structure we want
 	BusPacket1D actualQueue;
@@ -211,7 +212,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 		 Then it looks for data packets
 		 Otherwise, it starts looking for rows to close (in open page)
 	*/
-    if (DISTRIBUTED_PAGE_POLICY_FLAG)
+    if (HYBRID_PAGE_POLICY_FLAG)
     {
         unsigned startingRank = nextRank;
         unsigned startingBank = nextBank;
@@ -370,10 +371,9 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 //else if (rowActiveForClosePagePolicy)
                                 else if (rowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
                                 {
-                                    
-                                    
+                                    PRINT("bank precharged");
                                     BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
-                                                                          queue[0]->column, queue[0]->row, queue[0]->rank,
+                                                                          queue[0]->column, bankStates[queue[0]->rank][queue[0]->bank].openRowAddress, queue[0]->rank,
                                                                           queue[0]->bank, 0, dramsim_log);
                                     if (isIssuable(PreCommand))
                                     {
@@ -389,6 +389,24 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                         *busPacket = PreCommand;
                                         //rowActiveForClosePagePolicy = false;
                                         rowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
+                                        foundIssuable = true;
+                                    }
+                                    
+                                }
+                                
+                                else if (readWriteRowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
+                                {
+                                    PRINT("bank precharged");
+
+                                    
+                                    BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
+                                                                          queue[0]->column, bankStates[queue[0]->rank][queue[0]->bank].openRowAddress, queue[0]->rank,
+                                                                          queue[0]->bank, 0, dramsim_log);
+                                    if (isIssuable(PreCommand))
+                                    {
+                                        *busPacket = PreCommand;
+                                        //rowActiveForClosePagePolicy = false;
+                                        readWriteRowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
                                         foundIssuable = true;
                                     }
                                     
@@ -1240,10 +1258,12 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextActivate &&
 		        tFAWCountdown[busPacket->rank].size() < 4)
 		{
+            //PRINT("activate issued");
 			return true;
 		}
 		else
 		{
+            //if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextPrecharge && bankStates[busPacket->rank][busPacket->bank].lastCommand == ACTIVATE)
             if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextPrecharge && bankStates[busPacket->rank][busPacket->bank].lastCommand == ACTIVATE)
             {
                 //rowActiveForClosePagePolicy = true;
@@ -1260,12 +1280,16 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
             rowIdleForClosePagePolicy = true;
         }
              */
-        
+        if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage)
+        {
+            rowAccessCounters[busPacket->rank][busPacket->bank] = 0;
+        }
 		if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&
 		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextWrite &&
 		        busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress &&
 		        rowAccessCounters[busPacket->rank][busPacket->bank] < TOTAL_ROW_ACCESSES)
 		{
+            //PRINT("write packet is issued");
 			return true;
 		}
 		else
@@ -1274,6 +1298,10 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
             {
                 //rowIdleForClosePagePolicy = true;
                 rowIdleProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
+            }
+            else if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && busPacket->row != bankStates[busPacket->rank][busPacket->bank].openRowAddress)
+            {
+                readWriteRowActiveProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
             }
 			return false;
 		}
@@ -1309,17 +1337,20 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
                 //PRINT("Total row access = " << TOTAL_ROW_ACCESSES);
                 //PRINT("row access counter = " << rowAccessCounters[busPacket->rank][busPacket->bank]);
                 if (bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
-            {
-                
-                //rowIdleForClosePagePolicy = true;
-                rowIdleProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
-            }
+                {
+                    
+                    //rowIdleForClosePagePolicy = true;
+                    rowIdleProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
+                }
+                else if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && busPacket->row != bankStates[busPacket->rank][busPacket->bank].openRowAddress)
+                {
+                    readWriteRowActiveProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
+                }
             }
 			return false;
 		}
 		break;
 	case PRECHARGE:
-            
 		if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&
 		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextPrecharge)
 		{

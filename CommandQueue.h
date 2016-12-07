@@ -110,6 +110,7 @@ private:
     vector< vector<bool> > rowIdleProblemForClosePagePolicy;
     //bool rowActiveForClosePagePolicy;
     vector< vector<bool> > rowActiveProblemForClosePagePolicy;
+    vector< vector<bool> > readWriteRowActiveProblemForClosePagePolicy;
 };
 }
 

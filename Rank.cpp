@@ -33,6 +33,7 @@
 
 #include "Rank.h"
 #include "MemoryController.h"
+#include "CommandQueue.h"
 
 using namespace std;
 using namespace DRAMSim;
