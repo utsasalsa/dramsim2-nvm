@@ -406,12 +406,7 @@ void MemoryController::update()
             case WRITE:
                 if (!HYBRID_PAGE_POLICY_FLAG)
                 {
-                    /*
-                    if (poppedBusPacket->restoreWrite == true)
-                    {
-                        break;
-                    }
-                     */
+                    
                     if (poppedBusPacket->busPacketType == WRITE_P)
                     {
                         bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
@@ -431,6 +426,7 @@ void MemoryController::update()
                 {
                     if (DISTRIBUTED_PAGE_POLICY_FLAG)
                     {
+                        //PRINT("restore write detected!!!");
                         //if (poppedBusPacket->busPacketType == WRITE_P)
                         if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
                         {
@@ -636,12 +632,13 @@ void MemoryController::update()
             BusPacket *command = new BusPacket(bpType, transaction->address,
                                                newTransactionColumn, newTransactionRow, newTransactionRank,
                                                newTransactionBank, transaction->data, dramsim_log);
-            /*
+            
             if (transaction->restoreWrite == true && (command->busPacketType == WRITE || command->busPacketType == WRITE_P))
             {
+                //PRINT("restore command added");
                 command->restoreWrite = true;
             }
-             */
+            
             commandQueue.enqueue(ACTcommand);
             commandQueue.enqueue(command);
             
@@ -896,7 +893,6 @@ bool MemoryController::addTransaction(Transaction *trans)
 
 void MemoryController::resetStats()
 {
-
     //double threshold = ((double)(tRP) / (double)(tRP + tRCD));
     //threshold = 0;
     if (HYBRID_PAGE_POLICY_FLAG)
@@ -917,7 +913,7 @@ void MemoryController::resetStats()
                     //PRINT("Current bank states "<<bankStates[i][j].currentBankState);
                     //PRINT("last command = " << bankStates[i][j].lastCommand);
                     //PRINT("current command = " << packetType);
-                    
+                    //PRINT("hit rate = " << (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j]);
                     if ((double)commandQueue.bankHitCounters[i][j]/(double)commandQueue.bankAccessCounters[i][j] >= threshold)
                     {
                         // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
@@ -1012,7 +1008,6 @@ void MemoryController::resetStats()
             commandQueue.bankAccessCounters[i][j] = 0;
             
         }
-        
         // comment out resetting energy after each epoch so that we can get the overall energy at the end of simulation
         //burstEnergy[i] = 0;
         //actpreEnergy[i] = 0;

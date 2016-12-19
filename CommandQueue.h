@@ -88,7 +88,6 @@ public:
     vector< vector<unsigned> > bankAccessCounters;
     vector< vector<RowBufferPolicy> > bankRowBufferPolicy;
     
-    
 private:
 	void nextRankAndBank(unsigned &rank, unsigned &bank);
 	//fields

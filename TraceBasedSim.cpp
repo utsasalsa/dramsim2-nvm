@@ -502,7 +502,8 @@ int main(int argc, char **argv)
     
     void *data = NULL;
     int lineNumber = 0;
-    Transaction *trans=NULL;
+    Transaction *trans;
+    Transaction *previousTransaction = NULL;
     bool pendingTrans = false;
     
     traceFile.open(traceFileName.c_str());
@@ -514,7 +515,7 @@ int main(int argc, char **argv)
     }
     
     uint64_t previousTransactionAddress = -1;
-    TransactionType previousTransactionType = RETURN_DATA;
+    TransactionType previousTransactionType = DATA_READ;
     
     size_t i = 0;
     if (numCycles > 0) {
@@ -531,12 +532,13 @@ int main(int argc, char **argv)
                         data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
                         trans = new Transaction(transType, addr, data);
                         
+                        alignTransactionAddress(*trans);
+                        
                         if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
                         {
                             trans->restoreWrite = true;
                         }
-                        alignTransactionAddress(*trans);
-                        
+
                         if (i>=clockCycle)
                         {
                             if (!(*memorySystem).addTransaction(trans))
@@ -552,6 +554,7 @@ int main(int argc, char **argv)
                                 previousTransactionAddress = trans->address;
                                 previousTransactionType = trans->transactionType;
                                 // the memory system accepted our request so now it takes ownership of it
+                                //previousTransaction = new Transaction(*trans);
                                 trans = NULL; 
                             }
                         }
@@ -583,6 +586,7 @@ int main(int argc, char **argv)
 #endif
                     previousTransactionAddress = trans->address;
                     previousTransactionType = trans->transactionType;
+                    //previousTransaction = new Transaction(*trans);
                     trans=NULL;
                 }
             }
@@ -603,13 +607,13 @@ int main(int argc, char **argv)
                     {
                         data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
                         trans = new Transaction(transType, addr, data);
+
+                        alignTransactionAddress(*trans);
                         
                         if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
                         {
                             trans->restoreWrite = true;
                         }
-                        alignTransactionAddress(*trans);
-                        
                         if (i>=clockCycle)
                         {
                             if (!(*memorySystem).addTransaction(trans))
@@ -624,6 +628,12 @@ int main(int argc, char **argv)
                                 previousTransactionAddress = trans->address;
                                 previousTransactionType = trans->transactionType;
                                 // the memory system accepted our request so now it takes ownership of it
+                                //uint64_t address = trans->address;
+                                //enum TransactionType transType = trans->transactionType;
+                                //previousTransaction = NULL;
+                                //PRINT("created");
+                                //previousTransaction = new Transaction(transType, address, NULL);
+                                
                                 trans = NULL; 
                             }
                         }
@@ -656,6 +666,8 @@ int main(int argc, char **argv)
 #endif
                     previousTransactionAddress = trans->address;
                     previousTransactionType = trans->transactionType;
+                    
+                    //previousTransaction = new Transaction(*trans);
                     trans=NULL;
                 }
             }

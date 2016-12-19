@@ -117,6 +117,7 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
 		//init the empty vectors here so we don't seg fault later
 		tFAWCountdown.push_back(vector<unsigned>());
 	}
+    
 }
 CommandQueue::~CommandQueue()
 {
@@ -317,7 +318,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     bankAccess(*busPacket);
                                     queue.erase(queue.begin()+i);
                                     foundIssuable = true;
-                                    
                                     break;
                                 }
                                 else
@@ -337,6 +337,13 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 // then no chance something behind it can go instead
                                 
                                 *busPacket = queue[0];
+                                
+                                // set the restore part
+                                if (queue[0]->restoreWrite == true)
+                                {
+                                    //PRINT("restore");
+                                    //(*busPacket)->restoreWrite = true;
+                                }
                                 //check to see if the packet has not been accessed before
                                 // and if so, we could count it as a hit
                                 if (queue[0]->hasBeenAccessed == false)
@@ -371,7 +378,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 //else if (rowActiveForClosePagePolicy)
                                 else if (rowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
                                 {
-                                    PRINT("bank precharged");
+                                    //PRINT("bank precharged");
                                     BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
                                                                           queue[0]->column, bankStates[queue[0]->rank][queue[0]->bank].openRowAddress, queue[0]->rank,
                                                                           queue[0]->bank, 0, dramsim_log);
@@ -396,7 +403,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 
                                 else if (readWriteRowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
                                 {
-                                    PRINT("bank precharged");
 
                                     
                                     BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
@@ -638,7 +644,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                         sendingPRE = true;
                                         rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
                                         *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
-                                        bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+                                        //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
                                         foundIssuable = true;
                                         break;
                                     }
@@ -779,7 +785,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     }
                                     bankAccess(*busPacket);
 
-                                    bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+                                    //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
                                     queue.erase(queue.begin()+i);
                                     foundIssuable = true;
                                     break;
@@ -1059,7 +1065,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     sendingPRE = true;
                                     rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
                                     *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
-                                    bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+                                    //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
                                     break;
                                 }
                             }
@@ -1095,7 +1101,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 	{
 		tFAWCountdown[(*busPacket)->rank].push_back(tFAW);
 	}
-
+    
 	return true;
 }
 //monitor the access rate of different banks
