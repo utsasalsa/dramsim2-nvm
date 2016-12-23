@@ -204,7 +204,7 @@ void MemoryController::update()
         cmdCyclesLeft--;
         if (cmdCyclesLeft == 0) //packet is ready to be received by rank
         {
-            (*ranks)[outgoingCmdPacket->rank]->receiveFromBus(outgoingCmdPacket);
+            //(*ranks)[outgoingCmdPacket->rank]->receiveFromBus(outgoingCmdPacket);
             outgoingCmdPacket = NULL;
         }
     }
@@ -220,7 +220,7 @@ void MemoryController::update()
             {
                 (*parentMemorySystem->WriteDataDone)(parentMemorySystem->systemID,outgoingDataPacket->physicalAddress, currentClockCycle);
             }
-            (*ranks)[outgoingDataPacket->rank]->receiveFromBus(outgoingDataPacket);
+            //(*ranks)[outgoingDataPacket->rank]->receiveFromBus(outgoingDataPacket);
             outgoingDataPacket=NULL;
         }
     }
@@ -316,7 +316,6 @@ void MemoryController::update()
         unsigned bank = poppedBusPacket->bank;
         switch (poppedBusPacket->busPacketType)
         {
-            
             case READ_P:
             case READ:
                 //add energy to account for total
@@ -897,8 +896,8 @@ void MemoryController::resetStats()
     //threshold = 0;
     if (HYBRID_PAGE_POLICY_FLAG)
     {
-        double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
-        
+        //double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
+        double threshold = 0.01;
         PRINT("Total open page transactions = " << totalOpenPageTransactions);
         PRINT("Total close page transactions = " << totalClosePageTransactions);
         if (DISTRIBUTED_PAGE_POLICY_FLAG)
@@ -913,8 +912,22 @@ void MemoryController::resetStats()
                     //PRINT("Current bank states "<<bankStates[i][j].currentBankState);
                     //PRINT("last command = " << bankStates[i][j].lastCommand);
                     //PRINT("current command = " << packetType);
-                    //PRINT("hit rate = " << (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j]);
-                    if ((double)commandQueue.bankHitCounters[i][j]/(double)commandQueue.bankAccessCounters[i][j] >= threshold)
+                    
+                    double hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
+                    
+                    
+                    if (commandQueue.bankAccessCounters[i][j] >0)
+                    {
+                        PRINT("hit rate = " << hitRate);
+                    }
+                    else
+                    {
+                        PRINT("hit rate = " << 0);
+                        //continue;
+                    }
+                    PRINT(" ");
+                    
+                    if (hitRate >= threshold)
                     {
                         // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
                         if (commandQueue.bankRowBufferPolicy[i][j] == ClosePage)
@@ -934,6 +947,7 @@ void MemoryController::resetStats()
                         commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
                         PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
                     }
+                     
                 }
             }
         }

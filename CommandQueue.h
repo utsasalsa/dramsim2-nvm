@@ -87,7 +87,8 @@ public:
     vector< vector<unsigned> > bankHitCounters;
     vector< vector<unsigned> > bankAccessCounters;
     vector< vector<RowBufferPolicy> > bankRowBufferPolicy;
-    
+    vector< vector<BusPacket *> > previousPacketsArray;
+
 private:
 	void nextRankAndBank(unsigned &rank, unsigned &bank);
 	//fields
@@ -107,9 +108,13 @@ private:
     
     //bool rowIdleForClosePagePolicy;
     vector< vector<bool> > rowIdleProblemForClosePagePolicy;
+    vector< vector<bool> > rowIdleProblemForOpenPagePolicy;
+
     //bool rowActiveForClosePagePolicy;
     vector< vector<bool> > rowActiveProblemForClosePagePolicy;
     vector< vector<bool> > readWriteRowActiveProblemForClosePagePolicy;
+    
+    BusPacket *previousPacket;
 };
 }
 

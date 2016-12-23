@@ -43,6 +43,7 @@
 #include "CommandQueue.h"
 #include "MemoryController.h"
 #include <assert.h>
+#include "Rank.h"
 
 using namespace DRAMSim;
 
@@ -85,7 +86,8 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
     bankRowBufferPolicy = vector< vector<RowBufferPolicy> >(NUM_RANKS, vector<RowBufferPolicy>(NUM_BANKS,rowBufferPolicy));
     
     rowIdleProblemForClosePagePolicy = vector< vector<bool> >(NUM_RANKS, vector<bool>(NUM_BANKS,false));
-    
+    rowIdleProblemForOpenPagePolicy = vector< vector<bool> >(NUM_RANKS, vector<bool>(NUM_BANKS,false));
+
     rowActiveProblemForClosePagePolicy = vector< vector<bool> >(NUM_RANKS, vector<bool>(NUM_BANKS,false));
     readWriteRowActiveProblemForClosePagePolicy = vector< vector<bool> >(NUM_RANKS, vector<bool>(NUM_BANKS,false));
     
@@ -117,7 +119,9 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
 		//init the empty vectors here so we don't seg fault later
 		tFAWCountdown.push_back(vector<unsigned>());
 	}
-    
+    previousPacket = NULL;
+    //previousPacketsArray = vector< vector<BusPacket> >(NUM_RANKS, vector<BusPacket>(NUM_BANKS,*new BusPacket()));
+    previousPacketsArray = vector< vector<BusPacket *> >(NUM_RANKS, vector<BusPacket *>(NUM_BANKS,NULL));
 }
 CommandQueue::~CommandQueue()
 {
@@ -310,21 +314,36 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     *busPacket = queue[i];
                                     //check to see if the packet has not been accessed before
                                     // and if so, we could count it as a hit
+                                    /*
                                     if (queue[i]->hasBeenAccessed == false)
                                     {
                                         hit(*busPacket);
                                     }
+                                     */
+                                    /*
+                                    if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank] != NULL)
+                                    {
+                                        if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank]->row == (*busPacket)->row)
+                                        {
+                                            hit(*busPacket);
+                                        }
+                                    }
+                                    previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank] = *busPacket;
+                                    */
+                                    hit(*busPacket);
                                     //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
                                     bankAccess(*busPacket);
                                     queue.erase(queue.begin()+i);
                                     foundIssuable = true;
                                     break;
                                 }
+                                /*
                                 else
                                 {
                                     queue[i]->hasBeenAccessed = true;
                                     bankAccess(queue[i]);
                                 }
+                                 */
                             }
                         }
                         else
@@ -339,22 +358,32 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 *busPacket = queue[0];
                                 
                                 // set the restore part
-                                if (queue[0]->restoreWrite == true)
-                                {
-                                    //PRINT("restore");
-                                    //(*busPacket)->restoreWrite = true;
-                                }
                                 //check to see if the packet has not been accessed before
                                 // and if so, we could count it as a hit
+                                /*
                                 if (queue[0]->hasBeenAccessed == false)
                                 {
                                     hit(*busPacket);
                                 }
+                                 */
+                                /*
+                                if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank] != NULL)
+                                {
+                                    if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank]->row == (*busPacket)->row)
+                                    {
+                                        hit(*busPacket);
+                                    }
+                                }
+                                 */
+                                hit(*busPacket);
+                                
+                                
                                 bankAccess(*busPacket);
                                 
                                 queue.erase(queue.begin());
                                 foundIssuable = true;
                             }
+                            /*
                             else
                             {
                                 
@@ -384,15 +413,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                                                           queue[0]->bank, 0, dramsim_log);
                                     if (isIssuable(PreCommand))
                                     {
-                                        /*
-                                        PRINT("Bank State next precharge = " << bankStates[PreCommand->rank][PreCommand->bank].nextPrecharge);
-                                        PRINT("Current Clock Cycle = " << currentClockCycle);
-                                        
-                                        if (bankStates[PreCommand->rank][PreCommand->bank].currentBankState == RowActive)
-                                        {
-                                            PRINT("row is active");
-                                        }
-                                         */
                                         *busPacket = PreCommand;
                                         //rowActiveForClosePagePolicy = false;
                                         rowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
@@ -417,13 +437,8 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     }
                                     
                                 }
-                                else
-                                {
-                                    queue[0]->hasBeenAccessed = true;
-                                    bankAccess(queue[0]);
-                                }
-                                
                             }
+                             */
                         }
                         
                     }
@@ -538,7 +553,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                 {
                     unsigned startingRank = nextRank;
                     unsigned startingBank = nextBank;
-                    bool foundIssuable = false;
+                    //bool foundIssuable = false;
                     vector<BusPacket *> &queue = getCommandQueue(nextRank,nextBank);
                     //make sure there is something there first
                     if (!queue.empty() && !((nextRank == refreshRank) && refreshWaiting))
@@ -558,6 +573,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                         prevPacket->bank == packet->bank &&
                                         prevPacket->row == packet->row)
                                     {
+                                        //PRINT("dependency found");
                                         dependencyFound = true;
                                         break;
                                     }
@@ -565,12 +581,19 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 if (dependencyFound) continue;
                                 
                                 *busPacket = packet;
+                                //PRINT("bank state " << bankStates[packet->rank][packet->bank].currentBankState);
+                                //PRINT("issued packet bank = " << packet->bank);
+                                //PRINT("issued packet type = " << packet->busPacketType);
+                                //PRINT("");
                                 //check to see if the packet has not been accessed before
                                 // and if so, we could count it as a hit
+                                /*
                                 if (packet->hasBeenAccessed == false)
                                 {
                                     hit(*busPacket);
                                 }
+                                 */
+                                hit(*busPacket);
                                 bankAccess(*busPacket);
                                 //if the bus packet before is an activate, that is the act that was
                                 //	paired with the column access we are removing, so we have to remove
@@ -589,14 +612,8 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     //or just remove the one bus packet
                                     queue.erase(queue.begin()+i);
                                 }
-                                
                                 foundIssuable = true;
                                 break;
-                            }
-                            else
-                            {
-                                packet->hasBeenAccessed = true;
-                                bankAccess(packet);
                             }
                         }
                     }
@@ -611,6 +628,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                     
                     //if nothing was issuable, see if we can issue a PRE to an open bank
                     //	that has no other commands waiting
+                    
                     if (!foundIssuable)
                     {
                         //search for banks to close
@@ -620,6 +638,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                         
                         do // round robin over all ranks and banks
                         {
+                         
                             vector <BusPacket *> &queue = getCommandQueue(nextRankPRE, nextBankPRE);
                             bool found = false;
                             //check if bank is open
@@ -650,8 +669,28 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     }
                                 }
                             }
+                            /*
+                            else if (rowIdleProblemForOpenPagePolicy[nextRank][nextBank] == true && bankRowBufferPolicy[nextRankPRE][nextBankPRE] == OpenPage)
+                            {
+                                PRINT("row idle problem");
+                                BusPacket *ACTcommand = new BusPacket(ACTIVATE, queue[0]->physicalAddress, queue[0]->column, queue[0]->row, queue[0]->rank, queue[0]->bank, 0, dramsim_log);
+                                
+                                if (isIssuable(ACTcommand))
+                                {
+                                    
+                                    //PRINT("Activate packet is popped");
+                                    *busPacket = ACTcommand;
+                                    //rowIdleForClosePagePolicy = false;
+                                    rowIdleProblemForClosePagePolicy[nextRankPRE][nextBankPRE] = false;
+                                    foundIssuable = true;
+                                }
+                            }
+                             */
+                            
+                        
                             nextRankAndBank(nextRankPRE, nextBankPRE);
                         }
+                        
                         while (!(startingPRERank == nextRankPRE && startingPREBank == nextBankPRE));
                         
                         
@@ -687,7 +726,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
         
         //if we couldn't find anything to send, return false
         if (!foundIssuable) return false;
-
     }
     else
     {
@@ -779,12 +817,15 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     *busPacket = queue[i];
                                     //check to see if the packet has not been accessed before
                                     // and if so, we could count it as a hit
+                                    /*
                                     if (queue[i]->hasBeenAccessed == false)
                                     {
                                         hit(*busPacket);
                                     }
                                     bankAccess(*busPacket);
-
+                                    */
+                                    //hit(*busPacket);
+                                    //bankAccess(*busPacket);
                                     //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
                                     queue.erase(queue.begin()+i);
                                     foundIssuable = true;
@@ -808,20 +849,23 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 *busPacket = queue[0];
                                 //check to see if the packet has not been accessed before
                                 // and if so, we could count it as a hit
+                                /*
                                 if (queue[0]->hasBeenAccessed == false)
                                 {
                                     hit(*busPacket);
                                 }
                                 bankAccess(*busPacket);
-
+                                */
                                 queue.erase(queue.begin());
                                 foundIssuable = true;
                             }
+                            /*
                             else
                             {
                                 queue[0]->hasBeenAccessed = true;
                                 bankAccess(queue[0]);
                             }
+                             */
                         }
                         
                     }
@@ -969,11 +1013,13 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 
                                 //check to see if the packet has not been accessed before
                                 // and if so, we could count it as a hit
+                                /*
                                 if (packet->hasBeenAccessed == false)
                                 {
                                     hit(*busPacket);
                                 }
-                                bankAccess(*busPacket);
+                                */
+                                //bankAccess(*busPacket);
                                 //if the bus packet before is an activate, that is the act that was
                                 //	paired with the column access we are removing, so we have to remove
                                 //	that activate as well (check i>0 because if i==0 then theres nothing before it)
@@ -995,11 +1041,13 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 foundIssuable = true;
                                 break;
                             }
+                            /*
                             else
                             {
                                 packet->hasBeenAccessed = true;
                                 bankAccess(packet);
                             }
+                            */
                         }
                     }
                     
@@ -1117,63 +1165,23 @@ void CommandQueue::hit(BusPacket *busPacket)
 {
     if (busPacket->busPacketType == WRITE_P || busPacket->busPacketType == WRITE || busPacket->busPacketType == READ_P || busPacket->busPacketType == READ)
     {
-        bankHitCounters[busPacket->rank][busPacket->bank]++;
-        bankAccessCounters[busPacket->rank][busPacket->bank]++;
-    }
-    
-    /*
-    if (DISTRIBUTED_PAGE_POLICY_FLAG)
-    {
-        if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage)
+        if (previousPacketsArray[busPacket->rank][busPacket->bank] != NULL)
         {
-            if (busPacket->busPacketType == READ)
+            
+            if (previousPacketsArray[busPacket->rank][busPacket->bank]->row == busPacket->row)
             {
-                busPacket->busPacketType = READ_P;
+                
+                bankHitCounters[busPacket->rank][busPacket->bank]++;
+                //bankAccessCounters[busPacket->rank][busPacket->bank]++;
             }
-            else if (busPacket->busPacketType == WRITE)
-            {
-                busPacket->busPacketType = WRITE_P;
-            }
+            previousPacketsArray[busPacket->rank][busPacket->bank] = busPacket;
         }
-        else if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == OpenPage)
+        else
         {
-            if (busPacket->busPacketType == READ_P)
-            {
-                busPacket->busPacketType = READ;
-            }
-            else if (busPacket->busPacketType == WRITE_P)
-            {
-                busPacket->busPacketType = WRITE;
-            }
+            previousPacketsArray[busPacket->rank][busPacket->bank] = busPacket;
         }
     }
-    else
-    {
-        if (rowBufferPolicy == ClosePage)
-        {
-            if (busPacket->busPacketType == READ)
-            {
-                busPacket->busPacketType = READ_P;
-            }
-            else if (busPacket->busPacketType == WRITE)
-            {
-                busPacket->busPacketType = WRITE_P;
-            }
-        }
-        else if (rowBufferPolicy == OpenPage)
-        {
-            if (busPacket->busPacketType == READ_P)
-            {
-                busPacket->busPacketType = READ;
-            }
-            else if (busPacket->busPacketType == WRITE_P)
-            {
-                busPacket->busPacketType = WRITE;
-            }
-        }
-    }
-     */
-    
+
 }
 
 //check if a rank/bank queue has room for a certain number of bus packets
@@ -1258,6 +1266,7 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 
 		break;
 	case ACTIVATE:
+            
         //PRINT("Activate rank/bank " << busPacket->rank << "/" << busPacket->bank);
 		if ((bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle ||
 		        bankStates[busPacket->rank][busPacket->bank].currentBankState == Refreshing) &&
@@ -1265,6 +1274,10 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 		        tFAWCountdown[busPacket->rank].size() < 4)
 		{
             //PRINT("activate issued");
+            //PRINT("activate issued bank" << busPacket->bank);
+            //PRINT("last command = " << bankStates[busPacket->rank][busPacket->bank].lastCommand);
+            //PRINT("current command = " << busPacket->busPacketType);
+            //PRINT("current bank state in command queue = " << bankStates[busPacket->rank][busPacket->bank].currentBankState);
 			return true;
 		}
 		else
@@ -1321,6 +1334,21 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
                 rowIdleForClosePagePolicy = true;
             }
             */
+            if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive)
+            {
+                //PRINT("row active");
+                if (currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextRead)
+                {
+                    if (busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress)
+                    {
+                        if (rowAccessCounters[busPacket->rank][busPacket->bank] < TOTAL_ROW_ACCESSES)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        /*
 		if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&
 		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextRead &&
 		        busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress &&
@@ -1328,7 +1356,7 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 		{
 			return true;
 		}
-         
+        */
 		else
 		{
             /*
@@ -1348,9 +1376,17 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
                     //rowIdleForClosePagePolicy = true;
                     rowIdleProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
                 }
-                else if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && busPacket->row != bankStates[busPacket->rank][busPacket->bank].openRowAddress)
+                else if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && busPacket->row != bankStates[busPacket->rank][busPacket->bank].openRowAddress)
                 {
                     readWriteRowActiveProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
+                }
+            }
+            else
+            {
+                if (bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
+                {
+                    //rowIdleForClosePagePolicy = true;
+                    rowIdleProblemForOpenPagePolicy[busPacket->rank][busPacket->bank] = true;
                 }
             }
 			return false;
