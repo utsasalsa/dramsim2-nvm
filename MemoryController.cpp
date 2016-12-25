@@ -116,6 +116,8 @@ totalOpenPageTransactions(0)
     
     distributedNumberOfOpenPageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
     distributedNumberOfClosePageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
+    
+    firstTimeFlag = true;
 }
 
 //get a bus packet from either data or cmd bus
@@ -896,8 +898,8 @@ void MemoryController::resetStats()
     //threshold = 0;
     if (HYBRID_PAGE_POLICY_FLAG)
     {
-        //double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
-        double threshold = 0.01;
+        double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
+        //double threshold = 0.01;
         PRINT("Total open page transactions = " << totalOpenPageTransactions);
         PRINT("Total close page transactions = " << totalClosePageTransactions);
         if (DISTRIBUTED_PAGE_POLICY_FLAG)
@@ -905,6 +907,12 @@ void MemoryController::resetStats()
             PRINT("Threshold = " << threshold);
             for (size_t i=0; i<NUM_RANKS; i++)
             {
+                if (firstTimeFlag == true)
+                {
+                    firstTimeFlag = false;
+                    break;
+                }
+                
                 for (size_t j=0; j<NUM_BANKS; j++)
                 {
                     //PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
@@ -1152,7 +1160,6 @@ void MemoryController::printStats(bool finalStats)
         PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
         PRINT( "     -Burst      (watts)     : " << burstPower[r]);
         PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
-        
         if (VIS_FILE_OUTPUT)
         {
             csvOut.getOutputStream() << endl;

@@ -134,6 +134,9 @@ private:
     uint64_t totalClosePageTransactions;
     uint64_t totalOpenPageTransactions;
     
+    //flag for the first in hybrid page policy
+    bool firstTimeFlag;
+    
 public:
     
 	// energy values are per rank -- SST uses these directly, so make these public 
