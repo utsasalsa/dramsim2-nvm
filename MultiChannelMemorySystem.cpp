@@ -42,15 +42,22 @@
 
 using namespace DRAMSim; 
 
-
+/*
 MultiChannelMemorySystem::MultiChannelMemorySystem(const string &deviceIniFilename_, const string &systemIniFilename_, const string &pwd_, const string &traceFilename_, unsigned megsOfMemory_, string *visFilename_, const IniReader::OverrideMap *paramOverrides)
 	:megsOfMemory(megsOfMemory_), deviceIniFilename(deviceIniFilename_),
 	systemIniFilename(systemIniFilename_), traceFilename(traceFilename_),
 	pwd(pwd_), visFilename(visFilename_), 
 	clockDomainCrosser(new ClockDomain::Callback<MultiChannelMemorySystem, void>(this, &MultiChannelMemorySystem::actual_update)),
 	csvOut(new CSVWriter(visDataOut))
+*/
+MultiChannelMemorySystem::MultiChannelMemorySystem(const string &deviceIniFilename_, const string &systemIniFilename_, const string &pwd_, const vector<string> &traceFileNameArray_, unsigned megsOfMemory_, string *visFilename_, const IniReader::OverrideMap *paramOverrides)
+:megsOfMemory(megsOfMemory_), deviceIniFilename(deviceIniFilename_),
+systemIniFilename(systemIniFilename_), traceFileNameArray(traceFileNameArray_),
+pwd(pwd_), visFilename(visFilename_),
+clockDomainCrosser(new ClockDomain::Callback<MultiChannelMemorySystem, void>(this, &MultiChannelMemorySystem::actual_update)),
+csvOut(new CSVWriter(visDataOut))
 {
-	currentClockCycle=0; 
+	currentClockCycle=0;
 	if (visFilename)
 		printf("CC VISFILENAME=%s\n",visFilename->c_str());
 
@@ -165,7 +172,8 @@ string FilenameWithNumberSuffix(const string &filename, const string &extension,
  * TODO: verification info needs to be generated per channel so it has to be
  * moved back to MemorySystem
  **/
-void MultiChannelMemorySystem::InitOutputFiles(string traceFilename)
+//void MultiChannelMemorySystem::InitOutputFiles(string traceFilename)
+void MultiChannelMemorySystem::InitOutputFiles(vector<string> traceFileNameArray)
 {
 	size_t lastSlash;
 	size_t deviceIniFilenameLength = deviceIniFilename.length();
@@ -221,16 +229,40 @@ void MultiChannelMemorySystem::InitOutputFiles(string traceFilename)
 				deviceName = deviceName.substr(lastSlash+1,deviceIniFilenameLength-lastSlash-1);
 			}
 
-		string rest;
+		//string rest;
+            string traceFileNameArrayString = "";
+            if (traceFileNameArray.size() > 1)
+            {
+                traceFileNameArrayString = "multipleTraces_";
+            }
 			// working backwards, chop off the next piece of the directory
+            for (int i = 0; i < traceFileNameArray.size(); i++)
+            {
+                if ((lastSlash = traceFileNameArray[i].find_last_of("/")) != string::npos)
+                {
+                    traceFileNameArrayString = traceFileNameArrayString + traceFileNameArray[i].substr(lastSlash+1,traceFileNameArray[i].length()-lastSlash-1) + "_";
+                }
+                else
+                {
+                    traceFileNameArrayString = traceFileNameArrayString + traceFileNameArray[i] + "_";
+                }
+            }
+            /*
 			if ((lastSlash = traceFilename.find_last_of("/")) != string::npos)
 			{
 				traceFilename = traceFilename.substr(lastSlash+1,traceFilename.length()-lastSlash-1);
 			}
+             */
+            /*
 			if (sim_description != NULL)
 			{
 				traceFilename += "."+sim_description_str;
 			}
+            */
+            if (sim_description != NULL)
+            {
+                traceFileNameArrayString += "."+sim_description_str;
+            }
 
 			if (pwd.length() > 0)
 			{
@@ -239,7 +271,8 @@ void MultiChannelMemorySystem::InitOutputFiles(string traceFilename)
 
 			// create the directories if they don't exist 
 			mkdirIfNotExist(path);
-			path = path + traceFilename + "/";
+			//path = path + traceFilename + "/";
+            path = path + traceFileNameArrayString + "/";
 			mkdirIfNotExist(path);
 			path = path + deviceName + "/";
 			mkdirIfNotExist(path);
@@ -388,7 +421,8 @@ void MultiChannelMemorySystem::actual_update()
 {
 	if (currentClockCycle == 0)
 	{
-		InitOutputFiles(traceFilename);
+		//InitOutputFiles(traceFilename);
+        InitOutputFiles(traceFileNameArray);
 		DEBUG("DRAMSim2 Clock Frequency ="<<clockDomainCrosser.clock1<<"Hz, CPU Clock Frequency="<<clockDomainCrosser.clock2<<"Hz"); 
 	}
 
@@ -545,8 +579,9 @@ int MultiChannelMemorySystem::getIniFloat(const std::string& field, float *val)
 }
 
 namespace DRAMSim {
-MultiChannelMemorySystem *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, string *visfilename) 
+//MultiChannelMemorySystem *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, string *visfilename)
+MultiChannelMemorySystem *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const vector<string> &traceFileNameArray, unsigned megsOfMemory, string *visfilename)
 {
-	return new MultiChannelMemorySystem(dev, sys, pwd, trc, megsOfMemory, visfilename);
+	return new MultiChannelMemorySystem(dev, sys, pwd, traceFileNameArray, megsOfMemory, visfilename);
 }
 }

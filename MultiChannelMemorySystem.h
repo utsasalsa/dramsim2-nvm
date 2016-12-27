@@ -43,7 +43,8 @@ class MultiChannelMemorySystem : public SimulatorObject
 {
 	public: 
 
-	MultiChannelMemorySystem(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, string *visFilename=NULL, const IniReader::OverrideMap *paramOverrides=NULL);
+	//MultiChannelMemorySystem(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, string *visFilename=NULL, const IniReader::OverrideMap *paramOverrides=NULL);
+    	MultiChannelMemorySystem(const string &dev, const string &sys, const string &pwd, const vector<string> &trcArray, unsigned megsOfMemory, string *visFilename=NULL, const IniReader::OverrideMap *paramOverrides=NULL);
 		virtual ~MultiChannelMemorySystem();
 			bool addTransaction(Transaction *trans);
 			bool addTransaction(const Transaction &trans);
@@ -62,7 +63,8 @@ class MultiChannelMemorySystem : public SimulatorObject
 			int getIniUint64(const std::string &field, uint64_t *val);
 			int getIniFloat(const std::string &field, float *val);
 
-	void InitOutputFiles(string tracefilename);
+	//void InitOutputFiles(string tracefilename);
+    void InitOutputFiles(vector<string> traceFileNameArray);
 	void setCPUClockSpeed(uint64_t cpuClkFreqHz);
 
 	//output file
@@ -76,7 +78,8 @@ class MultiChannelMemorySystem : public SimulatorObject
 		unsigned megsOfMemory; 
 		string deviceIniFilename;
 		string systemIniFilename;
-		string traceFilename;
+		//string traceFilename;
+        vector<string> traceFileNameArray;
 		string pwd;
 		string *visFilename;
 		ClockDomain::ClockDomainCrosser clockDomainCrosser; 
