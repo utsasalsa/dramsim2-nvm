@@ -349,6 +349,8 @@ int main(int argc, char **argv)
     unsigned megsOfMemory=2048;
     bool useClockCycle=true;
     
+    vector<string> traceFileNameArray;
+    
     IniReader::OverrideMap *paramOverrides = NULL;
     
     unsigned numCycles=0;
@@ -396,8 +398,19 @@ int main(int argc, char **argv)
                 exit(0);
                 break;
             case 't':
+            {
                 traceFileName = string(optarg);
+                traceFileNameArray.push_back(traceFileName);
+                /*
+                stringstream ss((string(optarg)));
+                string temp;
+                while (ss >> temp)
+                {
+                    traceFileArray.push_back(temp);
+                }
+                 */
                 break;
+            }
             case 's':
                 systemIniFilename = string(optarg);
                 break;
@@ -431,7 +444,7 @@ int main(int argc, char **argv)
                 break;
         }
     }
-    
+
     // get the trace filename
     string temp = traceFileName.substr(traceFileName.find_last_of("/")+1);
     
@@ -455,6 +468,35 @@ int main(int argc, char **argv)
         exit(0);
     }
     
+    //////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////Multiple Traces//////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
+    for (int j = 0 ; j < traceFileNameArray.size(); j++)
+    {
+        string temp = traceFileNameArray[j].substr(traceFileNameArray[j].find_last_of("/")+1);
+        temp = temp.substr(0,temp.find_first_of("_"));
+        
+        if (temp=="mase")
+        {
+            traceType = mase;
+        }
+        else if (temp=="k6")
+        {
+            traceType = k6;
+        }
+        else if (temp=="misc")
+        {
+            traceType = misc;
+        }
+        else
+        {
+            ERROR("== Unknown Tracefile Type : " << temp);
+            exit(0);
+        }
+    }
+    //////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
     
     // no default value for the default model name
     if (deviceIniFilename.length() == 0)
@@ -471,11 +513,33 @@ int main(int argc, char **argv)
         traceFileName = pwdString + "/" +traceFileName;
     }
     
-    DEBUG("== Loading trace file '"<<traceFileName<<"' == ");
+    //DEBUG("== Loading trace file '"<<traceFileName<<"' == ");
     
     ifstream traceFile;
     string line;
     
+    //////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////Multiple Traces//////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
+    for (int j = 0 ; j < traceFileNameArray.size(); j++)
+    {
+        //PRINT("opening traces");
+        if (pwdString.length() > 0 && traceFileNameArray[j][0] != '/')
+        {
+            traceFileNameArray[j] = pwdString + "/" + traceFileNameArray[j];
+        }
+        DEBUG("== Loading trace file '"<<traceFileNameArray[j]<<"' == ");
+    }
+    
+    
+    
+    //vector<ifstream *> traceFileArray = vector<ifstream *>(traceFileNameArray.size(), NULL);
+    //vector<ifstream *> traceFileArray;
+    ifstream *traceFileArray = new ifstream[traceFileNameArray.size()];
+    vector<string> lineArray = vector<string>(traceFileNameArray.size());
+    //////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
     
     MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, visFilename, paramOverrides);
     // set the frequency ratio to 1:1
@@ -513,171 +577,244 @@ int main(int argc, char **argv)
         cout << "== Error - Could not open trace file"<<endl;
         exit(0);
     }
+    //////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////Multiple Traces//////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
     
+    vector<int> lineNumberArray = vector<int>(traceFileNameArray.size(), 0);
+    
+    
+    
+    for (int j = 0; j < traceFileNameArray.size(); j++)
+    {
+        traceFileArray[j].open(traceFileNameArray[j].c_str());
+        if (!traceFileArray[j].is_open())
+        {
+            cout << "== Error - Could not open trace file"<<endl;
+            exit(0);
+        }
+    }
+    vector<bool> endOfTraceArray = vector<bool>(traceFileNameArray.size(), false);
+    //////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////
+
     uint64_t previousTransactionAddress = -1;
     TransactionType previousTransactionType = DATA_READ;
     
     size_t i = 0;
-    if (numCycles > 0) {
+    if (numCycles > 0)
+    {
         for (i=0;i<numCycles;i++)
         {
-            if (!pendingTrans)
+            for (int j = 0; j < traceFileNameArray.size(); j++)
             {
-                if (!traceFile.eof())
+                //pendingTrans = false;
+                if (!pendingTrans)
                 {
-                    getline(traceFile, line);
-                    
-                    if (line.size() > 0)
+                    //if (!traceFile.eof())
+                    if (!traceFileArray[j].eof())
                     {
-                        data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
-                        trans = new Transaction(transType, addr, data);
+                        //getline(traceFile, line);
+                        getline(traceFileArray[j], lineArray[j]);
                         
-                        alignTransactionAddress(*trans);
-                        
-                        if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
+                        //if (line.size() > 0)
+                        if (lineArray[j].size() > 0)
                         {
-                            trans->restoreWrite = true;
-                        }
+                            
+                            //data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
+                            data = parseTraceFileLine(lineArray[j], addr, transType,clockCycle, traceType,useClockCycle);
 
-                        if (i>=clockCycle)
-                        {
-                            if (!(*memorySystem).addTransaction(trans))
+                            trans = new Transaction(transType, addr, data);
+                            
+                            alignTransactionAddress(*trans);
+                            
+                            if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
                             {
-                                pendingTrans = true;
+                                trans->restoreWrite = true;
+                            }
+                            
+                            if (i>=clockCycle)
+                            {
+                                if (!(*memorySystem).addTransaction(trans))
+                                {
+                                    pendingTrans = true;
+                                }
+                                else
+                                {
+#ifdef RETURN_TRANSACTIONS
+                                    transactionReceiver.add_pending(trans, i);
+#endif
+                                    
+                                    previousTransactionAddress = trans->address;
+                                    previousTransactionType = trans->transactionType;
+                                    // the memory system accepted our request so now it takes ownership of it
+                                    //previousTransaction = new Transaction(*trans);
+                                    trans = NULL;
+                                }
                             }
                             else
                             {
-#ifdef RETURN_TRANSACTIONS
-                                transactionReceiver.add_pending(trans, i); 
-#endif
-                                
-                                previousTransactionAddress = trans->address;
-                                previousTransactionType = trans->transactionType;
-                                // the memory system accepted our request so now it takes ownership of it
-                                //previousTransaction = new Transaction(*trans);
-                                trans = NULL; 
+                                pendingTrans = true;
                             }
                         }
                         else
                         {
-                            pendingTrans = true;
+                            //DEBUG("WARNING: Skipping line "<<lineNumber<< " ('" << line << "') in tracefile");
+                            DEBUG("WARNING: Skipping line "<<lineNumberArray[j]<< " ('" << lineArray[j] << "') in tracefile");
+
                         }
+                        //lineNumber++;
+                        lineNumberArray[j]++;
                     }
                     else
                     {
-                        DEBUG("WARNING: Skipping line "<<lineNumber<< " ('" << line << "') in tracefile");
+                        //we're out of trace, set pending=false and let the thing spin without adding transactions
+                        pendingTrans = false;
+                        endOfTraceArray[j] = true;
                     }
-                    lineNumber++;
                 }
-                else
+                
+                else if (pendingTrans && i >= clockCycle)
                 {
-                    //we're out of trace, set pending=false and let the thing spin without adding transactions
-                    pendingTrans = false; 
-                }
-            }
-            
-            else if (pendingTrans && i >= clockCycle)
-            {
-                pendingTrans = !(*memorySystem).addTransaction(trans);
-                if (!pendingTrans)
-                {
+                    pendingTrans = !(*memorySystem).addTransaction(trans);
+                    if (!pendingTrans)
+                    {
 #ifdef RETURN_TRANSACTIONS
-                    transactionReceiver.add_pending(trans, i); 
+                        transactionReceiver.add_pending(trans, i);
 #endif
-                    previousTransactionAddress = trans->address;
-                    previousTransactionType = trans->transactionType;
-                    //previousTransaction = new Transaction(*trans);
-                    trans=NULL;
+                        previousTransactionAddress = trans->address;
+                        previousTransactionType = trans->transactionType;
+                        //previousTransaction = new Transaction(*trans);
+                        trans=NULL;
+                    }
                 }
+                
+                (*memorySystem).update();
             }
-            
-            (*memorySystem).update();
         }
     } // if (numCycles > 0)
-    else { // run to the end of the trace
+    else
+    { // run to the end of the trace
         while (1)
         {
-            if (!pendingTrans)
+            for (int j = 0; j < traceFileNameArray.size(); j++)
             {
-                if (!traceFile.eof())
+                if (endOfTraceArray[j] == true)
                 {
-                    getline(traceFile, line);
                     
-                    if (line.size() > 0)
+                    continue;
+                }
+                if (!pendingTrans)
+                {
+                    //if (!traceFile.eof())
+                    if (!traceFileArray[j].eof())
                     {
-                        data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
-                        trans = new Transaction(transType, addr, data);
+                        //getline(traceFile, line);
+                        getline(traceFileArray[j], lineArray[j]);
+                        if (lineArray[j].size() > 0)
+                        {
+                            
+                            //data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
+                            data = parseTraceFileLine(lineArray[j], addr, transType,clockCycle, traceType,useClockCycle);
+                            
 
-                        alignTransactionAddress(*trans);
-                        
-                        if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
-                        {
-                            trans->restoreWrite = true;
-                        }
-                        if (i>=clockCycle)
-                        {
-                            if (!(*memorySystem).addTransaction(trans))
+                            trans = new Transaction(transType, addr, data);
+                            
+                            alignTransactionAddress(*trans);
+                            
+                            if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
                             {
-                                pendingTrans = true;
+                                trans->restoreWrite = true;
+                            }
+                            if (i>=clockCycle)
+                            {
+                                if (!(*memorySystem).addTransaction(trans))
+                                {
+                                    pendingTrans = true;
+                                }
+                                else
+                                {
+#ifdef RETURN_TRANSACTIONS
+                                    transactionReceiver.add_pending(trans, i);
+#endif
+                                    previousTransactionAddress = trans->address;
+                                    previousTransactionType = trans->transactionType;
+                                    // the memory system accepted our request so now it takes ownership of it
+                                    //uint64_t address = trans->address;
+                                    //enum TransactionType transType = trans->transactionType;
+                                    //previousTransaction = NULL;
+                                    //PRINT("created");
+                                    //previousTransaction = new Transaction(transType, address, NULL);
+                                    
+                                    trans = NULL;
+                                }
                             }
                             else
                             {
-#ifdef RETURN_TRANSACTIONS
-                                transactionReceiver.add_pending(trans, i); 
-#endif
-                                previousTransactionAddress = trans->address;
-                                previousTransactionType = trans->transactionType;
-                                // the memory system accepted our request so now it takes ownership of it
-                                //uint64_t address = trans->address;
-                                //enum TransactionType transType = trans->transactionType;
-                                //previousTransaction = NULL;
-                                //PRINT("created");
-                                //previousTransaction = new Transaction(transType, address, NULL);
-                                
-                                trans = NULL; 
+                                pendingTrans = true;
                             }
                         }
                         else
                         {
-                            pendingTrans = true;
+                            //DEBUG("WARNING: Skipping line "<<lineNumber<< " ('" << line << "') in tracefile");
+                            DEBUG("WARNING: Skipping line "<<lineNumberArray[j]<< " ('" << lineArray[j] << "') in tracefile");
+
                         }
+                        //lineNumber++;
+                        lineNumberArray[j]++;
                     }
                     else
                     {
-                        DEBUG("WARNING: Skipping line "<<lineNumber<< " ('" << line << "') in tracefile");
+                        //we're out of trace, break and terminate the simulation.
+                        pendingTrans = false;
+                        endOfTraceArray[j] = true;
+                        //break;
                     }
-                    lineNumber++;
                 }
-                else
+                
+                else if (pendingTrans && i >= clockCycle)
                 {
-                    //we're out of trace, break and terminate the simulation.
-                    pendingTrans = false; 
-                    break;
-                }
-            }
-            
-            else if (pendingTrans && i >= clockCycle)
-            {
-                pendingTrans = !(*memorySystem).addTransaction(trans);
-                if (!pendingTrans)
-                {
+                    pendingTrans = !(*memorySystem).addTransaction(trans);
+                    if (!pendingTrans)
+                    {
 #ifdef RETURN_TRANSACTIONS
-                    transactionReceiver.add_pending(trans, i); 
+                        transactionReceiver.add_pending(trans, i);
 #endif
-                    previousTransactionAddress = trans->address;
-                    previousTransactionType = trans->transactionType;
-                    
-                    //previousTransaction = new Transaction(*trans);
-                    trans=NULL;
+                        previousTransactionAddress = trans->address;
+                        previousTransactionType = trans->transactionType;
+                        
+                        //previousTransaction = new Transaction(*trans);
+                        trans=NULL;
+                    }
                 }
+                
+                (*memorySystem).update();
+                i++;
             }
             
-            (*memorySystem).update();
-            i++;
+            bool endOfAllTraces = true;
+            
+            for (int j = 0; j < traceFileNameArray.size(); j++)
+            {
+                endOfAllTraces = endOfAllTraces & endOfTraceArray[j];
+            }
+            
+            if (endOfAllTraces == true)
+            {
+                break;
+            }
+            
         }
     }
     
-    traceFile.close();
+    //traceFile.close();
+    
+    for (int j = 0; j < traceFileNameArray.size(); j++)
+    {
+        traceFileArray[j].close();
+    }
+    
     memorySystem->printStats(true);
     cout << "Total number of CPU cycles: " << i << endl;
     
