@@ -541,7 +541,9 @@ int main(int argc, char **argv)
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
     
-    MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, visFilename, paramOverrides);
+    //MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, visFilename, paramOverrides);
+    MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileNameArray, megsOfMemory, visFilename, paramOverrides);
+
     // set the frequency ratio to 1:1
     //memorySystem->setCPUClockSpeed(0);
     // set the CPU frequence to 2GHz
@@ -599,8 +601,10 @@ int main(int argc, char **argv)
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
 
-    uint64_t previousTransactionAddress = -1;
-    TransactionType previousTransactionType = DATA_READ;
+    //uint64_t previousTransactionAddress = -1;
+    vector<uint64_t> previousTransactionAddressArray = vector<uint64_t>(traceFileNameArray.size(), -1);
+    //TransactionType previousTransactionType = DATA_READ;
+    vector<TransactionType> previousTransactionTypeArray = vector<TransactionType>(traceFileNameArray.size(), DATA_READ);
     
     size_t i = 0;
     if (numCycles > 0)
@@ -629,7 +633,8 @@ int main(int argc, char **argv)
                             
                             alignTransactionAddress(*trans);
                             
-                            if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
+                            //if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
+                            if (trans->transactionType == DATA_WRITE && previousTransactionTypeArray[j] == DATA_READ && trans->address == previousTransactionAddressArray[j])
                             {
                                 trans->restoreWrite = true;
                             }
@@ -646,8 +651,10 @@ int main(int argc, char **argv)
                                     transactionReceiver.add_pending(trans, i);
 #endif
                                     
-                                    previousTransactionAddress = trans->address;
-                                    previousTransactionType = trans->transactionType;
+                                    //previousTransactionAddress = trans->address;
+                                    previousTransactionAddressArray[j] = trans->address;
+                                    //previousTransactionType = trans->transactionType;
+                                    previousTransactionTypeArray[j] = trans->transactionType;
                                     // the memory system accepted our request so now it takes ownership of it
                                     //previousTransaction = new Transaction(*trans);
                                     trans = NULL;
@@ -683,8 +690,10 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                         transactionReceiver.add_pending(trans, i);
 #endif
-                        previousTransactionAddress = trans->address;
-                        previousTransactionType = trans->transactionType;
+                        //previousTransactionAddress = trans->address;
+                        previousTransactionAddressArray[j] = trans->address;
+                        //previousTransactionType = trans->transactionType;
+                        previousTransactionTypeArray[j] = trans->transactionType;
                         //previousTransaction = new Transaction(*trans);
                         trans=NULL;
                     }
@@ -723,7 +732,8 @@ int main(int argc, char **argv)
                             
                             alignTransactionAddress(*trans);
                             
-                            if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
+                            //if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
+                            if (trans->transactionType == DATA_WRITE && previousTransactionTypeArray[j] == DATA_READ && trans->address == previousTransactionAddressArray[j])
                             {
                                 trans->restoreWrite = true;
                             }
@@ -738,15 +748,11 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                                     transactionReceiver.add_pending(trans, i);
 #endif
-                                    previousTransactionAddress = trans->address;
-                                    previousTransactionType = trans->transactionType;
+                                    //previousTransactionAddress = trans->address;
+                                    previousTransactionAddressArray[j] = trans->address;
+                                    //previousTransactionType = trans->transactionType;
+                                    previousTransactionTypeArray[j] = trans->transactionType;
                                     // the memory system accepted our request so now it takes ownership of it
-                                    //uint64_t address = trans->address;
-                                    //enum TransactionType transType = trans->transactionType;
-                                    //previousTransaction = NULL;
-                                    //PRINT("created");
-                                    //previousTransaction = new Transaction(transType, address, NULL);
-                                    
                                     trans = NULL;
                                 }
                             }
@@ -781,8 +787,10 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                         transactionReceiver.add_pending(trans, i);
 #endif
-                        previousTransactionAddress = trans->address;
-                        previousTransactionType = trans->transactionType;
+                        //previousTransactionAddress = trans->address;
+                        previousTransactionAddressArray[j] = trans->address;
+                        //previousTransactionType = trans->transactionType;
+                        previousTransactionTypeArray[j] = trans->transactionType;
                         
                         //previousTransaction = new Transaction(*trans);
                         trans=NULL;
