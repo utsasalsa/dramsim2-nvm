@@ -535,7 +535,8 @@ int main(int argc, char **argv)
     
     //vector<ifstream *> traceFileArray = vector<ifstream *>(traceFileNameArray.size(), NULL);
     //vector<ifstream *> traceFileArray;
-    ifstream *traceFileArray = new ifstream[traceFileNameArray.size()];
+    //ifstream *traceFileArray = new ifstream[traceFileNameArray.size()];
+    vector<ifstream*> traceFileArray;
     vector<string> lineArray = vector<string>(traceFileNameArray.size());
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
@@ -589,14 +590,22 @@ int main(int argc, char **argv)
     
     for (int j = 0; j < traceFileNameArray.size(); j++)
     {
-        traceFileArray[j].open(traceFileNameArray[j].c_str());
-        if (!traceFileArray[j].is_open())
+        std::ifstream * f = new std::ifstream(traceFileNameArray[j].c_str(), std::ios::in); // create in free store
+        traceFileArray.push_back(f);
+        //traceFileArray[j].open(traceFileNameArray[j].c_str());
+        if (!traceFileArray[j]->is_open())
         {
             cout << "== Error - Could not open trace file"<<endl;
             exit(0);
         }
     }
     vector<bool> endOfTraceArray = vector<bool>(traceFileNameArray.size(), false);
+    vector<bool> turnOfTrace = vector<bool>(traceFileNameArray.size(), false);
+    
+    if (turnOfTrace.size() > 0)
+    {
+        turnOfTrace[0] = true;
+    }
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
@@ -613,15 +622,18 @@ int main(int argc, char **argv)
         {
             for (int j = 0; j < traceFileNameArray.size(); j++)
             {
+                if (turnOfTrace[j] == false)
+                {
+                    continue;
+                }
                 //pendingTrans = false;
                 if (!pendingTrans)
                 {
                     //if (!traceFile.eof())
-                    if (!traceFileArray[j].eof())
+                    if (!traceFileArray[j]->eof())
                     {
                         //getline(traceFile, line);
-                        getline(traceFileArray[j], lineArray[j]);
-                        
+                        getline(*traceFileArray[j], lineArray[j]);
                         //if (line.size() > 0)
                         if (lineArray[j].size() > 0)
                         {
@@ -658,6 +670,11 @@ int main(int argc, char **argv)
                                     // the memory system accepted our request so now it takes ownership of it
                                     //previousTransaction = new Transaction(*trans);
                                     trans = NULL;
+                                    
+                                    /////////////////////////////////////////////////
+                                    turnOfTrace[j] = false;
+                                    turnOfTrace[(j+1)%traceFileNameArray.size()] = true;
+                                    /////////////////////////////////////////////////
                                 }
                             }
                             else
@@ -696,6 +713,11 @@ int main(int argc, char **argv)
                         previousTransactionTypeArray[j] = trans->transactionType;
                         //previousTransaction = new Transaction(*trans);
                         trans=NULL;
+                        /////////////////////////////////////////////////
+                        turnOfTrace[j] = false;
+                        turnOfTrace[(j+1)%traceFileNameArray.size()] = true;
+                        /////////////////////////////////////////////////
+
                     }
                 }
                 
@@ -707,20 +729,33 @@ int main(int argc, char **argv)
     { // run to the end of the trace
         while (1)
         {
-            for (int j = 0; j < traceFileNameArray.size(); j++)
+            for (int j = 0; j < traceFileArray.size(); j++)
             {
+                /*
                 if (endOfTraceArray[j] == true)
+                {
+                    //turnOfTrace[j] = false;
+                    //PRINT("trace " << j << " is done");
+                    //turnOfTrace[(j+1)%traceFileNameArray.size()] = true;
+                    continue;
+                }
+                 
+                */
+                if (turnOfTrace[j] == false)
                 {
                     
                     continue;
                 }
+                
+                
                 if (!pendingTrans)
                 {
                     //if (!traceFile.eof())
-                    if (!traceFileArray[j].eof())
+                    if (!traceFileArray[j]->eof())
                     {
+                        //PRINT("reading trace " << j);
                         //getline(traceFile, line);
-                        getline(traceFileArray[j], lineArray[j]);
+                        getline(*traceFileArray[j], lineArray[j]);
                         if (lineArray[j].size() > 0)
                         {
                             
@@ -729,7 +764,7 @@ int main(int argc, char **argv)
                             
 
                             trans = new Transaction(transType, addr, data);
-                            
+                            //trans->address = trans->address >> (j + 15);
                             alignTransactionAddress(*trans);
                             
                             //if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
@@ -754,6 +789,10 @@ int main(int argc, char **argv)
                                     previousTransactionTypeArray[j] = trans->transactionType;
                                     // the memory system accepted our request so now it takes ownership of it
                                     trans = NULL;
+                                    ///////////////////////////////////////////////
+                                    turnOfTrace[j] = false;
+                                    turnOfTrace[(j+1)%traceFileArray.size()] = true;
+                                    ////////////////////////////////////////////////
                                 }
                             }
                             else
@@ -775,6 +814,12 @@ int main(int argc, char **argv)
                         //we're out of trace, break and terminate the simulation.
                         pendingTrans = false;
                         endOfTraceArray[j] = true;
+                        /////////////////////////////////
+                        
+                        //turnOfTrace[j] = true;
+                        //PRINT("trace " << j << " ended");
+                        traceFileArray.erase(traceFileArray.begin()+j);
+                        /////////////////////////////////
                         //break;
                     }
                 }
@@ -794,13 +839,18 @@ int main(int argc, char **argv)
                         
                         //previousTransaction = new Transaction(*trans);
                         trans=NULL;
+                        ///////////////////////////////////////////////
+                        turnOfTrace[j] = false;
+                        turnOfTrace[(j+1)%traceFileArray.size()] = true;
+                        ////////////////////////////////////////////////
+
                     }
                 }
                 
                 (*memorySystem).update();
                 i++;
             }
-            
+            /*
             bool endOfAllTraces = true;
             
             for (int j = 0; j < traceFileNameArray.size(); j++)
@@ -812,7 +862,11 @@ int main(int argc, char **argv)
             {
                 break;
             }
-            
+            */
+            if (traceFileArray.size() < 1)
+            {
+                break;
+            }
         }
     }
     
@@ -820,7 +874,7 @@ int main(int argc, char **argv)
     
     for (int j = 0; j < traceFileNameArray.size(); j++)
     {
-        traceFileArray[j].close();
+        traceFileArray[j]->close();
     }
     
     memorySystem->printStats(true);
