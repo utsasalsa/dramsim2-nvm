@@ -743,7 +743,7 @@ int main(int argc, char **argv)
                 */
                 if (turnOfTrace[j] == false)
                 {
-                    
+                    //PRINT("not trace " << j << " turn");
                     continue;
                 }
                 
@@ -751,6 +751,7 @@ int main(int argc, char **argv)
                 if (!pendingTrans)
                 {
                     //if (!traceFile.eof())
+                    
                     if (!traceFileArray[j]->eof())
                     {
                         //PRINT("reading trace " << j);
@@ -815,7 +816,7 @@ int main(int argc, char **argv)
                         pendingTrans = false;
                         endOfTraceArray[j] = true;
                         /////////////////////////////////
-                        
+                        turnOfTrace[(j+1)%traceFileArray.size()] = true;
                         //turnOfTrace[j] = true;
                         //PRINT("trace " << j << " ended");
                         traceFileArray.erase(traceFileArray.begin()+j);
