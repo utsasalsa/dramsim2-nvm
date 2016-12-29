@@ -145,7 +145,7 @@ extern std::string SCHEDULING_POLICY;
 extern std::string ADDRESS_MAPPING_SCHEME;
 extern std::string QUEUING_STRUCTURE;
 
-extern bool Restore_Flag;
+extern bool ENABLE_RESTORE;
 extern bool HYBRID_PAGE_POLICY_FLAG;
 extern bool DISTRIBUTED_PAGE_POLICY_FLAG;
 
