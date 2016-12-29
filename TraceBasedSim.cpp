@@ -471,6 +471,7 @@ int main(int argc, char **argv)
     //////////////////////////////////////////////////////////////////////////////////////
     /////////////////////Multiple Traces//////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
+    /* The below doesn't seem to be needed
     for (int j = 0 ; j < traceFileNameArray.size(); j++)
     {
         string temp = traceFileNameArray[j].substr(traceFileNameArray[j].find_last_of("/")+1);
@@ -494,6 +495,7 @@ int main(int argc, char **argv)
             exit(0);
         }
     }
+    */
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
@@ -515,8 +517,8 @@ int main(int argc, char **argv)
     
     //DEBUG("== Loading trace file '"<<traceFileName<<"' == ");
     
-    ifstream traceFile;
-    string line;
+    //ifstream traceFile;
+    //string line;
     
     //////////////////////////////////////////////////////////////////////////////////////
     /////////////////////Multiple Traces//////////////////////////////////////////////////
@@ -569,10 +571,11 @@ int main(int argc, char **argv)
     
     void *data = NULL;
     int lineNumber = 0;
-    Transaction *trans;
-    Transaction *previousTransaction = NULL;
+    Transaction *trans = NULL;
+    Transaction *transRestore = NULL;
     bool pendingTrans = false;
     
+    /*
     traceFile.open(traceFileName.c_str());
     
     if (!traceFile.is_open())
@@ -580,13 +583,12 @@ int main(int argc, char **argv)
         cout << "== Error - Could not open trace file"<<endl;
         exit(0);
     }
+    */
     //////////////////////////////////////////////////////////////////////////////////////
     /////////////////////Multiple Traces//////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
     
     vector<int> lineNumberArray = vector<int>(traceFileNameArray.size(), 0);
-    
-    
     
     for (int j = 0; j < traceFileNameArray.size(); j++)
     {
@@ -599,7 +601,7 @@ int main(int argc, char **argv)
             exit(0);
         }
     }
-    vector<bool> endOfTraceArray = vector<bool>(traceFileNameArray.size(), false);
+    //vector<bool> endOfTraceArray = vector<bool>(traceFileNameArray.size(), false);
     vector<bool> turnOfTrace = vector<bool>(traceFileNameArray.size(), false);
     
     if (turnOfTrace.size() > 0)
@@ -610,125 +612,15 @@ int main(int argc, char **argv)
     //////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////
 
-    //uint64_t previousTransactionAddress = -1;
-    vector<uint64_t> previousTransactionAddressArray = vector<uint64_t>(traceFileNameArray.size(), -1);
-    //TransactionType previousTransactionType = DATA_READ;
-    vector<TransactionType> previousTransactionTypeArray = vector<TransactionType>(traceFileNameArray.size(), DATA_READ);
-    
     size_t i = 0;
-    if (numCycles > 0)
-    {
-        for (i=0;i<numCycles;i++)
-        {
-            for (int j = 0; j < traceFileNameArray.size(); j++)
-            {
-                if (turnOfTrace[j] == false)
-                {
-                    continue;
-                }
-                //pendingTrans = false;
-                if (!pendingTrans)
-                {
-                    //if (!traceFile.eof())
-                    if (!traceFileArray[j]->eof())
-                    {
-                        //getline(traceFile, line);
-                        getline(*traceFileArray[j], lineArray[j]);
-                        //if (line.size() > 0)
-                        if (lineArray[j].size() > 0)
-                        {
-                            
-                            //data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
-                            data = parseTraceFileLine(lineArray[j], addr, transType,clockCycle, traceType,useClockCycle);
-
-                            trans = new Transaction(transType, addr, data);
-                            
-                            alignTransactionAddress(*trans);
-                            
-                            //if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
-                            if (trans->transactionType == DATA_WRITE && previousTransactionTypeArray[j] == DATA_READ && trans->address == previousTransactionAddressArray[j])
-                            {
-                                trans->restoreWrite = true;
-                            }
-                            
-                            if (i>=clockCycle)
-                            {
-                                if (!(*memorySystem).addTransaction(trans))
-                                {
-                                    pendingTrans = true;
-                                }
-                                else
-                                {
-#ifdef RETURN_TRANSACTIONS
-                                    transactionReceiver.add_pending(trans, i);
-#endif
-                                    
-                                    //previousTransactionAddress = trans->address;
-                                    previousTransactionAddressArray[j] = trans->address;
-                                    //previousTransactionType = trans->transactionType;
-                                    previousTransactionTypeArray[j] = trans->transactionType;
-                                    // the memory system accepted our request so now it takes ownership of it
-                                    //previousTransaction = new Transaction(*trans);
-                                    trans = NULL;
-                                    
-                                    /////////////////////////////////////////////////
-                                    turnOfTrace[j] = false;
-                                    turnOfTrace[(j+1)%traceFileNameArray.size()] = true;
-                                    /////////////////////////////////////////////////
-                                }
-                            }
-                            else
-                            {
-                                pendingTrans = true;
-                            }
-                        }
-                        else
-                        {
-                            //DEBUG("WARNING: Skipping line "<<lineNumber<< " ('" << line << "') in tracefile");
-                            DEBUG("WARNING: Skipping line "<<lineNumberArray[j]<< " ('" << lineArray[j] << "') in tracefile");
-
-                        }
-                        //lineNumber++;
-                        lineNumberArray[j]++;
-                    }
-                    else
-                    {
-                        //we're out of trace, set pending=false and let the thing spin without adding transactions
-                        pendingTrans = false;
-                        endOfTraceArray[j] = true;
-                    }
-                }
-                
-                else if (pendingTrans && i >= clockCycle)
-                {
-                    pendingTrans = !(*memorySystem).addTransaction(trans);
-                    if (!pendingTrans)
-                    {
-#ifdef RETURN_TRANSACTIONS
-                        transactionReceiver.add_pending(trans, i);
-#endif
-                        //previousTransactionAddress = trans->address;
-                        previousTransactionAddressArray[j] = trans->address;
-                        //previousTransactionType = trans->transactionType;
-                        previousTransactionTypeArray[j] = trans->transactionType;
-                        //previousTransaction = new Transaction(*trans);
-                        trans=NULL;
-                        /////////////////////////////////////////////////
-                        turnOfTrace[j] = false;
-                        turnOfTrace[(j+1)%traceFileNameArray.size()] = true;
-                        /////////////////////////////////////////////////
-
-                    }
-                }
-                
-                (*memorySystem).update();
-            }
-        }
-    } // if (numCycles > 0)
-    else
     { // run to the end of the trace
         while (1)
         {
+            // if numCycles is set, just stop at the cycle.
+            if (numCycles > 0 && i >= numCycles) {
+              break;
+            }
+
             for (int j = 0; j < traceFileArray.size(); j++)
             {
                 /*
@@ -739,7 +631,6 @@ int main(int argc, char **argv)
                     //turnOfTrace[(j+1)%traceFileNameArray.size()] = true;
                     continue;
                 }
-                 
                 */
                 if (turnOfTrace[j] == false)
                 {
@@ -759,20 +650,17 @@ int main(int argc, char **argv)
                         getline(*traceFileArray[j], lineArray[j]);
                         if (lineArray[j].size() > 0)
                         {
-                            
                             //data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
                             data = parseTraceFileLine(lineArray[j], addr, transType,clockCycle, traceType,useClockCycle);
-                            
-
                             trans = new Transaction(transType, addr, data);
-                            //trans->address = trans->address >> (j + 15);
                             alignTransactionAddress(*trans);
-                            
-                            //if (trans->transactionType == DATA_WRITE && previousTransactionType == DATA_READ && trans->address == previousTransactionAddress)
-                            if (trans->transactionType == DATA_WRITE && previousTransactionTypeArray[j] == DATA_READ && trans->address == previousTransactionAddressArray[j])
-                            {
-                                trans->restoreWrite = true;
+                            // if enabling restores, create a restore after each read.
+                            // restore has the same clockCycle as read
+                            if (ENABLE_RESTORE && trans->transactionType == DATA_READ) {
+                              transRestore = new Transaction(DATA_WRITE, trans->address, trans->data);
+                              transRestore->restoreWrite = true;
                             }
+
                             if (i>=clockCycle)
                             {
                                 if (!(*memorySystem).addTransaction(trans))
@@ -784,16 +672,19 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                                     transactionReceiver.add_pending(trans, i);
 #endif
-                                    //previousTransactionAddress = trans->address;
-                                    previousTransactionAddressArray[j] = trans->address;
-                                    //previousTransactionType = trans->transactionType;
-                                    previousTransactionTypeArray[j] = trans->transactionType;
-                                    // the memory system accepted our request so now it takes ownership of it
-                                    trans = NULL;
-                                    ///////////////////////////////////////////////
-                                    turnOfTrace[j] = false;
-                                    turnOfTrace[(j+1)%traceFileArray.size()] = true;
-                                    ////////////////////////////////////////////////
+                                    if (transRestore) {
+                                      trans = transRestore;
+                                      pendingTrans = true;
+                                      transRestore = NULL;
+                                    }
+                                    else {
+                                      // the memory system accepted our request so now it takes ownership of it
+                                      trans = NULL;
+                                      ///////////////////////////////////////////////
+                                      turnOfTrace[j] = false;
+                                      turnOfTrace[(j+1)%traceFileArray.size()] = true;
+                                      ////////////////////////////////////////////////
+                                    }
                                 }
                             }
                             else
@@ -814,12 +705,19 @@ int main(int argc, char **argv)
                     {
                         //we're out of trace, break and terminate the simulation.
                         pendingTrans = false;
-                        endOfTraceArray[j] = true;
+                        //endOfTraceArray[j] = true;
                         /////////////////////////////////
                         turnOfTrace[(j+1)%traceFileArray.size()] = true;
                         //turnOfTrace[j] = true;
                         //PRINT("trace " << j << " ended");
+                        traceFileArray[j]->close();
                         traceFileArray.erase(traceFileArray.begin()+j);
+                        //after erasing the terminated trace, simply restart at the new first trace.
+                        turnOfTrace.erase(turnOfTrace.begin()+j);
+                        for (int i = 0; i < turnOfTrace.size(); i++)
+                          turnOfTrace[i] = false;
+                        if (turnOfTrace.size() > 0)
+                          turnOfTrace[0] = true;
                         /////////////////////////////////
                         //break;
                     }
@@ -833,24 +731,26 @@ int main(int argc, char **argv)
 #ifdef RETURN_TRANSACTIONS
                         transactionReceiver.add_pending(trans, i);
 #endif
-                        //previousTransactionAddress = trans->address;
-                        previousTransactionAddressArray[j] = trans->address;
-                        //previousTransactionType = trans->transactionType;
-                        previousTransactionTypeArray[j] = trans->transactionType;
-                        
-                        //previousTransaction = new Transaction(*trans);
-                        trans=NULL;
-                        ///////////////////////////////////////////////
-                        turnOfTrace[j] = false;
-                        turnOfTrace[(j+1)%traceFileArray.size()] = true;
-                        ////////////////////////////////////////////////
-
+                        if (transRestore) {
+                          trans = transRestore;
+                          pendingTrans = true;
+                          transRestore = NULL;
+                        }
+                        else {
+                          // the memory system accepted our request so now it takes ownership of it
+                          trans = NULL;
+                          ///////////////////////////////////////////////
+                          turnOfTrace[j] = false;
+                          turnOfTrace[(j+1)%traceFileArray.size()] = true;
+                          ////////////////////////////////////////////////
+                        }
                     }
                 }
-                
-                (*memorySystem).update();
-                i++;
             }
+
+            (*memorySystem).update();
+            i++;
+
             /*
             bool endOfAllTraces = true;
             
@@ -873,7 +773,7 @@ int main(int argc, char **argv)
     
     //traceFile.close();
     
-    for (int j = 0; j < traceFileNameArray.size(); j++)
+    for (int j = 0; j < traceFileArray.size(); j++)
     {
         traceFileArray[j]->close();
     }
@@ -885,6 +785,10 @@ int main(int argc, char **argv)
     if (trans)
     {
         delete trans;
+    }
+    if (transRestore)
+    {
+        delete transRestore;
     }
     delete(memorySystem);
 }

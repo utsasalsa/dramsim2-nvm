@@ -289,7 +289,7 @@ void MultiChannelMemorySystem::InitOutputFiles(vector<string> traceFileNameArray
 				queue = "pRankpBank";
 			}
             string restore = "";
-            if (Restore_Flag) {
+            if (ENABLE_RESTORE) {
                 restore = "withRestore";
             }
             else
