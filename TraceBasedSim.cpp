@@ -17,6 +17,7 @@
 #include "IniReader.h"
 #include "CSVWriter.h"
 #include "MemoryController.h"
+#include "SimulatorObject.h"
 
 
 using namespace DRAMSim;
@@ -53,6 +54,7 @@ public:
             ERROR("This should never happen");
             exit(-1);
         }
+        
     }
     
     void read_complete(unsigned id, uint64_t address, uint64_t done_cycle)
@@ -707,22 +709,27 @@ int main(int argc, char **argv)
                         pendingTrans = false;
                         //endOfTraceArray[j] = true;
                         /////////////////////////////////
-                        turnOfTrace[(j+1)%traceFileArray.size()] = true;
-                        //turnOfTrace[j] = true;
+                        
                         //PRINT("trace " << j << " ended");
                         traceFileArray[j]->close();
                         traceFileArray.erase(traceFileArray.begin()+j);
                         //after erasing the terminated trace, simply restart at the new first trace.
                         turnOfTrace.erase(turnOfTrace.begin()+j);
+                        
                         for (int i = 0; i < turnOfTrace.size(); i++)
+                        {
                           turnOfTrace[i] = false;
+                        }
+                        
                         if (turnOfTrace.size() > 0)
+                        {
                           turnOfTrace[0] = true;
+                        }
                         /////////////////////////////////
                         //break;
                     }
                 }
-                
+        
                 else if (pendingTrans && i >= clockCycle)
                 {
                     pendingTrans = !(*memorySystem).addTransaction(trans);
@@ -779,6 +786,7 @@ int main(int argc, char **argv)
     }
     
     memorySystem->printStats(true);
+    cout << "Number of clock cycles: " << memorySystem->currentClockCycle << endl;
     cout << "Total number of CPU cycles: " << i << endl;
     
     // make valgrind happy

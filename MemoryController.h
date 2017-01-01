@@ -73,6 +73,7 @@ public:
 	vector<Transaction *> transactionQueue;
     CSVWriter &csvOut;
     unsigned clockCounter;
+    
 private:
 	ostream &dramsim_log;
 	vector< vector <BankState> > bankStates;

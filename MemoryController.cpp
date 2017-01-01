@@ -118,6 +118,7 @@ totalOpenPageTransactions(0)
     distributedNumberOfClosePageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
     
     firstTimeFlag = true;
+    
 }
 
 //get a bus packet from either data or cmd bus
@@ -917,20 +918,22 @@ void MemoryController::resetStats()
                 {
                     //PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
                     //PRINT("commandQueue.bankAccessCounters = " << (double)commandQueue.bankAccessCounters[i][j]);
-                    //PRINT("Current bank states "<<bankStates[i][j].currentBankState);
-                    //PRINT("last command = " << bankStates[i][j].lastCommand);
-                    //PRINT("current command = " << packetType);
+                    PRINT("Current bank states "<<bankStates[i][j].currentBankState);
+                    PRINT("last command = " << bankStates[i][j].lastCommand);
+                    PRINT("packet row address: " << poppedBusPacket->row);
+                    PRINT("bank open row address: " << bankStates[i][j].openRowAddress);
+                    PRINT("current command = " << packetType);
                     
                     double hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
                     
                     
                     if (commandQueue.bankAccessCounters[i][j] >0)
                     {
-                        PRINT("hit rate = " << hitRate);
+                        //PRINT("hit rate = " << hitRate);
                     }
                     else
                     {
-                        PRINT("hit rate = " << 0);
+                        //PRINT("hit rate = " << 0);
                         //continue;
                     }
                     PRINT(" ");
@@ -942,6 +945,7 @@ void MemoryController::resetStats()
                         {
                             distributedNumberOfOpenPageSwitching[i][j]++;
                         }
+                        
                         commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
                         PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
                     }
@@ -953,6 +957,7 @@ void MemoryController::resetStats()
                             distributedNumberOfClosePageSwitching[i][j]++;
                         }
                         commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
+                        commandQueue.switchedToClosePage[i][j] = true;
                         PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
                     }
                      
@@ -1030,6 +1035,7 @@ void MemoryController::resetStats()
             commandQueue.bankAccessCounters[i][j] = 0;
             
         }
+        //PRINT("current clock cycle " << currentClockCycle);
         // comment out resetting energy after each epoch so that we can get the overall energy at the end of simulation
         //burstEnergy[i] = 0;
         //actpreEnergy[i] = 0;
@@ -1176,6 +1182,8 @@ void MemoryController::printStats(bool finalStats)
             csvOut.getOutputStream() << " -Act/Pre    (watts)=" <<actprePower[r] <<endl;
             csvOut.getOutputStream() << " -Burst      (watts)=" <<burstPower[r] <<endl;
             csvOut.getOutputStream() << " -Refresh    (watts)=" <<refreshPower[r] <<endl;
+            csvOut.getOutputStream() << endl;
+            csvOut.getOutputStream() << " Total Number of cylces=" <<currentClockCycle <<endl;
             csvOut.getOutputStream() << endl;
             
             if (HYBRID_PAGE_POLICY_FLAG)

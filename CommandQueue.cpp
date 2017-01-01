@@ -122,6 +122,9 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
     previousPacket = NULL;
     //previousPacketsArray = vector< vector<BusPacket> >(NUM_RANKS, vector<BusPacket>(NUM_BANKS,*new BusPacket()));
     previousPacketsArray = vector< vector<BusPacket *> >(NUM_RANKS, vector<BusPacket *>(NUM_BANKS,NULL));
+    
+    switchedToClosePage = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
+
 }
 CommandQueue::~CommandQueue()
 {
@@ -383,12 +386,27 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 queue.erase(queue.begin());
                                 foundIssuable = true;
                             }
-                            /*
+                            
                             else
                             {
-                                
+                                if (switchedToClosePage[queue[0]->rank][queue[0]->bank] && bankStates[queue[0]->rank][queue[0]->bank].lastCommand != ACTIVATE)
+                                //if (switchedToClosePage[queue[0]->rank][queue[0]->bank])
+                                {
+                                    BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
+                                                                          queue[0]->column, bankStates[queue[0]->rank][queue[0]->bank].openRowAddress, queue[0]->rank,
+                                                                          queue[0]->bank, 0, dramsim_log);
+                                    if (isIssuable(PreCommand))
+                                    {
+                                        //PRINT("Activate packet is popped");
+                                        *busPacket = PreCommand;
+                                        //rowIdleForClosePagePolicy = false;
+                                        //rowIdleProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
+                                        switchedToClosePage[queue[0]->rank][queue[0]->bank] = false;
+                                        foundIssuable = true;
+                                    }
+                                }
                                 //if (rowIdleForClosePagePolicy)
-                                if (rowIdleProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
+                                else if (rowIdleProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
                                 {
                                     //PRINT("row idle problem");
                                     BusPacket *ACTcommand = new BusPacket(ACTIVATE, queue[0]->physicalAddress,
@@ -438,7 +456,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     
                                 }
                             }
-                             */
+                            
                         }
                         
                     }
@@ -1260,6 +1278,7 @@ vector<BusPacket *> &CommandQueue::getCommandQueue(unsigned rank, unsigned bank)
 //checks if busPacket is allowed to be issued
 bool CommandQueue::isIssuable(BusPacket *busPacket)
 {
+    //PRINT("issueing packet: " << busPacket->busPacketType);
 	switch (busPacket->busPacketType)
 	{
 	case REFRESH:
@@ -1268,6 +1287,16 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 	case ACTIVATE:
             
         //PRINT("Activate rank/bank " << busPacket->rank << "/" << busPacket->bank);
+        //PRINT("current bank state " << bankStates[busPacket->rank][busPacket->bank].currentBankState);
+        //PRINT("last command " << bankStates[busPacket->rank][busPacket->bank].lastCommand);
+        //PRINT("tfaw count down " << tFAWCountdown[busPacket->rank].size());
+            //PRINT("command is activate");
+            /*
+        if (bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
+        {
+            PRINT("next activate is fine");
+        }
+             */
 		if ((bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle ||
 		        bankStates[busPacket->rank][busPacket->bank].currentBankState == Refreshing) &&
 		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextActivate &&
@@ -1334,15 +1363,19 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
                 rowIdleForClosePagePolicy = true;
             }
             */
+            
             if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive)
             {
                 //PRINT("row active");
                 if (currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextRead)
                 {
+                    
                     if (busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress)
                     {
+                        
                         if (rowAccessCounters[busPacket->rank][busPacket->bank] < TOTAL_ROW_ACCESSES)
                         {
+                            
                             return true;
                         }
                     }

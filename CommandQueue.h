@@ -88,6 +88,8 @@ public:
     vector< vector<unsigned> > bankAccessCounters;
     vector< vector<RowBufferPolicy> > bankRowBufferPolicy;
     vector< vector<BusPacket *> > previousPacketsArray;
+    vector< vector<bool> > switchedToClosePage;
+
 
 private:
 	void nextRankAndBank(unsigned &rank, unsigned &bank);
@@ -113,6 +115,7 @@ private:
     //bool rowActiveForClosePagePolicy;
     vector< vector<bool> > rowActiveProblemForClosePagePolicy;
     vector< vector<bool> > readWriteRowActiveProblemForClosePagePolicy;
+    //
     
     BusPacket *previousPacket;
 };
