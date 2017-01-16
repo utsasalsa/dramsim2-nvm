@@ -37,6 +37,7 @@
 
 #include "SystemConfiguration.h"
 #include "BusPacket.h"
+#include "AddressMapping.h"
 
 using std::ostream; 
 
@@ -46,7 +47,8 @@ enum TransactionType
 {
 	DATA_READ,
 	DATA_WRITE,
-	RETURN_DATA
+	RETURN_DATA,
+    DATA_PAGE_RESTORE
 };
 
 class Transaction
@@ -69,44 +71,133 @@ public:
 	Transaction(const Transaction &t);
 
 	BusPacketType getBusPacketType()
-	{
-		switch (transactionType)
-		{
-			case DATA_READ:
-			if (rowBufferPolicy == ClosePage)
-			{
-				return READ_P;
-			}
-			else if (rowBufferPolicy == OpenPage)
-			{
-				return READ; 
-			}
-			else
-			{
-				ERROR("Unknown row buffer policy");
-				abort();
-			}
-			break;
-		case DATA_WRITE:
-			if (rowBufferPolicy == ClosePage)
-			{
-				return WRITE_P;
-			}
-			else if (rowBufferPolicy == OpenPage)
-			{
-				return WRITE; 
-			}
-			else
-			{
-				ERROR("Unknown row buffer policy");
-				abort();
-			}
-			break;
-		default:
-			ERROR("This transaction type doesn't have a corresponding bus packet type");
-			abort();
-		}
-	}
+    {
+        switch (transactionType)
+        {
+            case DATA_READ:
+                if (rowBufferPolicy == ClosePage)
+                {
+                    return READ_P;
+                }
+                else if (rowBufferPolicy == OpenPage)
+                {
+                    return READ;
+                }
+                else
+                {
+                    ERROR("Unknown row buffer policy");
+                    abort();
+                }
+                break;
+            case DATA_WRITE:
+                if (rowBufferPolicy == ClosePage)
+                {
+                    return WRITE_P;
+                }
+                else if (rowBufferPolicy == OpenPage)
+                {
+                    return WRITE;
+                }
+                else
+                {
+                    ERROR("Unknown row buffer policy");
+                    abort();
+                }
+                break;
+            case DATA_PAGE_RESTORE:
+                return WRITE_RESTORE_PAGE;
+            default:
+                ERROR("This transaction type doesn't have a corresponding bus packet type");
+                abort();
+        }
+        
+    }
+    BusPacketType getBusPacketType(size_t address, RowBufferPolicy specificBankRowBufferPolicy)
+    {
+
+        if (DISTRIBUTED_PAGE_POLICY_FLAG)
+        {
+            switch (transactionType)
+            {
+                case DATA_READ:
+                    if (specificBankRowBufferPolicy == ClosePage)
+                    {
+                        return READ_P;
+                    }
+                    else if (specificBankRowBufferPolicy == OpenPage)
+                    {
+                        return READ;
+                    }
+                    else
+                    {
+                        ERROR("Unknown row buffer policy");
+                        abort();
+                    }
+                    break;
+                case DATA_WRITE:
+                    if (specificBankRowBufferPolicy == ClosePage)
+                    {
+                        return WRITE_P;
+                    }
+                    else if (specificBankRowBufferPolicy == OpenPage)
+                    {
+                        return WRITE;
+                    }
+                    else
+                    {
+                        ERROR("Unknown row buffer policy");
+                        abort();
+                    }
+                    break;
+                case DATA_PAGE_RESTORE:
+                    return WRITE_RESTORE_PAGE;
+                default:
+                    ERROR("This transaction type doesn't have a corresponding bus packet type");
+                    abort();
+            }
+        }
+        else
+        {
+            switch (transactionType)
+            {
+                case DATA_READ:
+                    if (rowBufferPolicy == ClosePage)
+                    {
+                        return READ_P;
+                    }
+                    else if (rowBufferPolicy == OpenPage)
+                    {
+                        return READ;
+                    }
+                    else
+                    {
+                        ERROR("Unknown row buffer policy");
+                        abort();
+                    }
+                    break;
+                case DATA_WRITE:
+                    if (rowBufferPolicy == ClosePage)
+                    {
+                        return WRITE_P;
+                    }
+                    else if (rowBufferPolicy == OpenPage)
+                    {
+                        return WRITE;
+                    }
+                    else
+                    {
+                        ERROR("Unknown row buffer policy");
+                        abort();
+                    }
+                    break;
+                case DATA_PAGE_RESTORE:
+                    return WRITE_RESTORE_PAGE;
+                default:
+                    ERROR("This transaction type doesn't have a corresponding bus packet type");
+                    abort();
+            }
+        }
+    }
 };
 
 }

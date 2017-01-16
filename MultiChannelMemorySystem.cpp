@@ -297,7 +297,6 @@ void MultiChannelMemorySystem::InitOutputFiles(vector<string> traceFileNameArray
                 restore = "withoutRestore";
             }
             
-            string hybridPagePolicy = "";
             if (HYBRID_PAGE_POLICY_FLAG)
             {
                 ROW_BUFFER_POLICY = "hybridPage";

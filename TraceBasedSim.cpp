@@ -446,6 +446,7 @@ int main(int argc, char **argv)
                 break;
         }
     }
+    
 
     // get the trace filename
     string temp = traceFileName.substr(traceFileName.find_last_of("/")+1);

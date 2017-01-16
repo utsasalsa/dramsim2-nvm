@@ -132,11 +132,12 @@ private:
     
     vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
     vector< vector<unsigned> > distributedNumberOfClosePageSwitching;
+    vector< vector<uint64_t> > lastTransactionAddressArray;
+    vector< vector<bool> > writeRestoreDoneForOpenPage;
+    vector< vector<bool> > firstRankBankTransaction;
     uint64_t totalClosePageTransactions;
     uint64_t totalOpenPageTransactions;
     
-    //flag for the first in hybrid page policy
-    bool firstTimeFlag;
     
 public:
     

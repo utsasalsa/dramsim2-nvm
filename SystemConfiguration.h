@@ -92,7 +92,7 @@ extern unsigned COL_LOW_BIT_WIDTH;
 extern unsigned REFRESH_PERIOD;
 extern float tCK;
 
-extern unsigned CL;
+extern unsigned CL;//same as tCAS
 extern unsigned AL;
 #define RL (CL+AL)
 #define WL (RL-1)
@@ -126,7 +126,9 @@ extern unsigned NUM_DEVICES;
 #define WRITE_AUTOPRE_DELAY (WL+BL/2+tWR+tRP)
 #define WRITE_TO_READ_DELAY_B (WL+BL/2+tWTR) //interbank
 #define WRITE_TO_READ_DELAY_R (WL+BL/2+tRTRS-RL) //interrank
-#define RESTORE_PAGE tRC
+//#define RESTORE_PAGE tRC+tRP+tWR+tRCD
+//#define RESTORE_PAGE 2*(tRC+tWR+tRCD)
+#define RESTORE_PAGE 4*WRITE_TO_PRE_DELAY
 #define RESTORE_LINE tRAS
 #define THRESHOLD ((tRP + RESTORE_PAGE - RESTORE_LINE) / (tRP + tRCD + RESTORE_PAGE))
 
@@ -148,7 +150,7 @@ extern std::string QUEUING_STRUCTURE;
 extern bool ENABLE_RESTORE;
 extern bool HYBRID_PAGE_POLICY_FLAG;
 extern bool DISTRIBUTED_PAGE_POLICY_FLAG;
-
+extern bool FIFO_OPEN_PAGE_SCHEDULING;
 
 enum TraceType
 {
@@ -201,12 +203,11 @@ extern RowBufferPolicy rowBufferPolicy;
 extern SchedulingPolicy schedulingPolicy;
 extern AddressMappingScheme addressMappingScheme;
 extern QueuingStructure queuingStructure;
-extern std::vector< std::vector<RowBufferPolicy> > bankRowBufferPolicy;
 
 //
 //FUNCTIONS
 //
-
+    
 unsigned inline dramsim_log2(unsigned value)
 {
 	unsigned logbase2 = 0;

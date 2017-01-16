@@ -96,6 +96,10 @@ void BusPacket::print(uint64_t currentClockCycle, bool dataStart)
 		case DATA:
 			//TODO: data verification?
 			break;
+        case WRITE_RESTORE_PAGE:
+            cmd_verify_out << currentClockCycle <<": Restore Page (" << rank << ");"<<endl;
+            break;
+                
 		default:
 			ERROR("Trying to print unknown kind of bus packet");
 			exit(-1);
@@ -138,6 +142,10 @@ void BusPacket::print()
 			printData();
 			PRINT("");
 			break;
+        case WRITE_RESTORE_PAGE:
+            PRINT("BP [ACT] pa[0x"<<hex<<physicalAddress<<dec<<"] r["<<rank<<"] b["<<bank<<"] row["<<row<<"] col["<<column<<"]");
+            break;
+     
 		default:
 			ERROR("Trying to print unknown kind of bus packet");
 			exit(-1);

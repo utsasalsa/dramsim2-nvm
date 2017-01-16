@@ -250,7 +250,7 @@ void Rank::receiveFromBus(BusPacket *packet)
                 PRINT("rank is active");
             }
              */
-             
+        
 		if (bankStates[packet->bank].currentBankState != RowActive ||
 		        currentClockCycle < bankStates[packet->bank].nextPrecharge)
 		{

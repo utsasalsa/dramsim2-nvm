@@ -48,7 +48,8 @@ enum BusPacketType
 	ACTIVATE,
 	PRECHARGE,
 	REFRESH,
-	DATA
+	DATA,
+    WRITE_RESTORE_PAGE
 };
 
 class BusPacket

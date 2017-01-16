@@ -124,6 +124,7 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
     previousPacketsArray = vector< vector<BusPacket *> >(NUM_RANKS, vector<BusPacket *>(NUM_BANKS,NULL));
     
     switchedToClosePage = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
+    openPageRestoreDone = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
 
 }
 CommandQueue::~CommandQueue()
@@ -220,7 +221,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
 		 Then it looks for data packets
 		 Otherwise, it starts looking for rows to close (in open page)
 	*/
-    if (HYBRID_PAGE_POLICY_FLAG)
+    if (HYBRID_PAGE_POLICY_FLAG == true && DISTRIBUTED_PAGE_POLICY_FLAG == true)
     {
         unsigned startingRank = nextRank;
         unsigned startingBank = nextBank;
@@ -232,59 +233,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
             {
                 bool sendingREF = false;
                 //if the memory controller set the flags signaling that we need to issue a refresh
-                if (refreshWaiting)
-                {
-                    bool foundActiveOrTooEarly = false;
-                    //look for an open bank
-                    for (size_t b=0;b<NUM_BANKS;b++)
-                    {
-                        vector<BusPacket *> &queue = getCommandQueue(refreshRank,b);
-                        //checks to make sure that all banks are idle
-                        if (bankStates[refreshRank][b].currentBankState == RowActive)
-                        {
-                            foundActiveOrTooEarly = true;
-                            //if the bank is open, make sure there is nothing else
-                            // going there before we close it
-                            for (size_t j=0;j<queue.size();j++)
-                            {
-                                BusPacket *packet = queue[j];
-                                if (packet->row == bankStates[refreshRank][b].openRowAddress &&
-                                    packet->bank == b)
-                                {
-                                    if (packet->busPacketType != ACTIVATE && isIssuable(packet))
-                                    {
-                                        *busPacket = packet;
-                                        queue.erase(queue.begin() + j);
-                                        sendingREF = true;
-                                    }
-                                    break;
-                                }
-                            }
-                            
-                            break;
-                        }
-                        //	NOTE: checks nextActivate time for each bank to make sure tRP is being
-                        //				satisfied.	the next ACT and next REF can be issued at the same
-                        //				point in the future, so just use nextActivate field instead of
-                        //				creating a nextRefresh field
-                        else if (bankStates[refreshRank][b].nextActivate > currentClockCycle)
-                        {
-                            foundActiveOrTooEarly = true;
-                            break;
-                        }
-                    }
-                    
-                    //if there are no open banks and timing has been met, send out the refresh
-                    //	reset flags and rank pointer
-                    if (!foundActiveOrTooEarly && bankStates[refreshRank][0].currentBankState != PowerDown)
-                    {
-                        *busPacket = new BusPacket(REFRESH, 0, 0, 0, refreshRank, 0, 0, dramsim_log);
-                        refreshRank = -1;
-                        refreshWaiting = false;
-                        sendingREF = true;
-                    }
-                } // refreshWaiting
-                
                 //if we're not sending a REF, proceed as normal
                 if (!sendingREF)
                 {
@@ -317,40 +265,20 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     *busPacket = queue[i];
                                     //check to see if the packet has not been accessed before
                                     // and if so, we could count it as a hit
-                                    /*
-                                    if (queue[i]->hasBeenAccessed == false)
-                                    {
-                                        hit(*busPacket);
-                                    }
-                                     */
-                                    /*
-                                    if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank] != NULL)
-                                    {
-                                        if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank]->row == (*busPacket)->row)
-                                        {
-                                            hit(*busPacket);
-                                        }
-                                    }
-                                    previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank] = *busPacket;
-                                    */
                                     hit(*busPacket);
-                                    //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
                                     bankAccess(*busPacket);
                                     queue.erase(queue.begin()+i);
                                     foundIssuable = true;
                                     break;
                                 }
-                                /*
-                                else
-                                {
-                                    queue[i]->hasBeenAccessed = true;
-                                    bankAccess(queue[i]);
-                                }
-                                 */
                             }
                         }
                         else
                         {
+                            if (rowAccessCounters[queue[0]->rank][queue[0]->bank] == TOTAL_ROW_ACCESSES)
+                            {
+                                rowAccessCounters[queue[0]->rank][queue[0]->bank]--;
+                            }
                             //PRINT("Checking that packet is issuable");
                             if (isIssuable(queue[0]))
                             {
@@ -363,30 +291,13 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 // set the restore part
                                 //check to see if the packet has not been accessed before
                                 // and if so, we could count it as a hit
-                                /*
-                                if (queue[0]->hasBeenAccessed == false)
-                                {
-                                    hit(*busPacket);
-                                }
-                                 */
-                                /*
-                                if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank] != NULL)
-                                {
-                                    if (previousPacketsArray[(*busPacket)->rank][(*busPacket)->bank]->row == (*busPacket)->row)
-                                    {
-                                        hit(*busPacket);
-                                    }
-                                }
-                                 */
                                 hit(*busPacket);
-                                
-                                
                                 bankAccess(*busPacket);
                                 
                                 queue.erase(queue.begin());
                                 foundIssuable = true;
                             }
-                            
+                            /*
                             else
                             {
                                 if (switchedToClosePage[queue[0]->rank][queue[0]->bank] && bankStates[queue[0]->rank][queue[0]->bank].lastCommand != ACTIVATE)
@@ -399,8 +310,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     {
                                         //PRINT("Activate packet is popped");
                                         *busPacket = PreCommand;
-                                        //rowIdleForClosePagePolicy = false;
-                                        //rowIdleProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
                                         switchedToClosePage[queue[0]->rank][queue[0]->bank] = false;
                                         foundIssuable = true;
                                     }
@@ -456,7 +365,100 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     
                                 }
                             }
-                            
+                            */
+                        }
+                        
+                        if (foundIssuable == false)
+                        {
+                            if (HYBRID_PAGE_POLICY_FLAG == true)
+                            {
+                                
+                                //PRINT("not found");
+                                if (ENABLE_RESTORE == true)
+                                {
+                                    //PRINT("not found");
+                                    /*
+                                    PRINT("last command: " << bankStates[nextRank][nextBank].lastCommand);
+                                    PRINT("current bank state: " << bankStates[nextRank][nextBank].currentBankState);
+                                    PRINT("bus packet type " << queue[0]->busPacketType);
+                                    PRINT("bus packet row " << queue[0]->row);
+                                    PRINT("bank open row " << bankStates[nextRank][nextBank].openRowAddress);
+                                    PRINT("total row access: " << rowAccessCounters[nextRank][nextBank]);
+                                    */
+                                    if ((bankStates[nextRank][nextBank].lastCommand == READ || bankStates[nextRank][nextBank].lastCommand == WRITE || bankStates[nextRank][nextBank].lastCommand == ACTIVATE) && bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row != bankStates[nextRank][nextBank].openRowAddress)
+                                    {
+                                        if (queue[0]->busPacketType == ACTIVATE)
+                                        {
+                                            
+                                            if (currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                            {
+                                                if (openPageRestoreDone[nextRank][nextBank] == false)
+                                                {
+                                                    if (currentClockCycle >= bankStates[nextRank][nextBank].nextWrite)
+                                                    {
+                                                        *busPacket = new BusPacket(WRITE_RESTORE_PAGE, 0, 0, bankStates[nextRank][nextBank].openRowAddress, nextRank, nextBank, 0, dramsim_log);
+                                                        openPageRestoreDone[nextRank][nextBank] = true;
+                                                        foundIssuable = true;
+                                                        //break;
+                                                    }
+                                                }
+                                                //else if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge && bankStates[nextRank][nextBank].lastCommand != ACTIVATE)
+                                                else if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge)
+                                                    
+                                                {
+                                                    //PRINT("precharge row");
+                                                    *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRank, nextBank, 0, dramsim_log);
+                                                    
+                                                    foundIssuable = true;
+                                                    
+                                                    openPageRestoreDone[nextRank][nextBank] = false;
+                                                    //break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else if (bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row == bankStates[nextRank][nextBank].openRowAddress && currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                    {
+                                        queue.erase(queue.begin());
+                                    }
+                                    else if (bankStates[nextRank][nextBank].currentBankState == Idle && (queue[0]->busPacketType == READ || queue[0]->busPacketType == READ_P || queue[0]->busPacketType == WRITE || queue[0]->busPacketType == WRITE_P) && currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                    {
+                                        *busPacket = new BusPacket(ACTIVATE, 0, 0, queue[0]->row, queue[0]->rank, queue[0]->bank, 0, dramsim_log);
+                                        openPageRestoreDone[nextRank][nextBank] = true;
+                                        foundIssuable = true;
+                                    }
+                                }
+                                
+                                else
+                                {
+                                    /*
+                                     PRINT("last command: " << bankStates[nextRank][nextBank].lastCommand);
+                                     PRINT("current bank state: " << bankStates[nextRank][nextBank].currentBankState);
+                                     PRINT("bus packet type " << queue[0]->busPacketType);
+                                     PRINT("bus packet row " << queue[0]->row);
+                                     PRINT("bank open row " << bankStates[nextRank][nextBank].openRowAddress);
+                                     PRINT("total row access: " << rowAccessCounters[nextRank][nextBank]);
+                                     */
+                                    if ((bankStates[nextRank][nextBank].lastCommand == READ || bankStates[nextRank][nextBank].lastCommand == WRITE) && bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row != bankStates[nextRank][nextBank].openRowAddress)
+                                    {
+                                        if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge)
+                                            
+                                        {
+                                            //PRINT("precharge row");
+                                            *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRank, nextBank, 0, dramsim_log);
+                                            
+                                            foundIssuable = true;
+                                            
+                                            openPageRestoreDone[nextRank][nextBank] = false;
+                                            //break;
+                                        }
+                                    }
+                                    else if (bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row == bankStates[nextRank][nextBank].openRowAddress && currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                    {
+                                        queue.erase(queue.begin());
+                                    }
+                                }
+                            }
                         }
                         
                     }
@@ -494,83 +496,11 @@ bool CommandQueue::pop(BusPacket **busPacket)
             else if (bankRowBufferPolicy[nextRank][nextBank]==OpenPage)
             {
                 bool sendingREForPRE = false;
-                if (refreshWaiting)
-                {
-                    bool sendREF = true;
-                    //make sure all banks idle and timing met for a REF
-                    for (size_t b=0;b<NUM_BANKS;b++)
-                    {
-                        //if a bank is active we can't send a REF yet
-                        if (bankStates[refreshRank][b].currentBankState == RowActive)
-                        {
-                            sendREF = false;
-                            bool closeRow = true;
-                            //search for commands going to an open row
-                            vector <BusPacket *> &refreshQueue = getCommandQueue(refreshRank,b);
-                            
-                            for (size_t j=0;j<refreshQueue.size();j++)
-                            {
-                                BusPacket *packet = refreshQueue[j];
-                                //if a command in the queue is going to the same row . . .
-                                if (bankStates[refreshRank][b].openRowAddress == packet->row &&
-                                    b == packet->bank)
-                                {
-                                    // . . . and is not an activate . . .
-                                    if (packet->busPacketType != ACTIVATE)
-                                    {
-                                        closeRow = false;
-                                        // . . . and can be issued . . .
-                                        if (isIssuable(packet))
-                                        {
-                                            //send it out
-                                            *busPacket = packet;
-                                            refreshQueue.erase(refreshQueue.begin()+j);
-                                            sendingREForPRE = true;
-                                        }
-                                        break;
-                                    }
-                                    else //command is an activate
-                                    {
-                                        //if we've encountered another act, no other command will be of interest
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            //if the bank is open and we are allowed to close it, then send a PRE
-                            if (closeRow && currentClockCycle >= bankStates[refreshRank][b].nextPrecharge)
-                            {
-                                rowAccessCounters[refreshRank][b]=0;
-                                *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, refreshRank, b, 0, dramsim_log);
-                                sendingREForPRE = true;
-                            }
-                            break;
-                        }
-                        //	NOTE: the next ACT and next REF can be issued at the same
-                        //				point in the future, so just use nextActivate field instead of
-                        //				creating a nextRefresh field
-                        else if (bankStates[refreshRank][b].nextActivate > currentClockCycle) //and this bank doesn't have an open row
-                        {
-                            sendREF = false;
-                            break;
-                        }
-                    }
-                    
-                    //if there are no open banks and timing has been met, send out the refresh
-                    //	reset flags and rank pointer
-                    if (sendREF && bankStates[refreshRank][0].currentBankState != PowerDown)
-                    {
-                        *busPacket = new BusPacket(REFRESH, 0, 0, 0, refreshRank, 0, 0, dramsim_log);
-                        refreshRank = -1;
-                        refreshWaiting = false;
-                        sendingREForPRE = true;
-                    }
-                }
                 
                 if (!sendingREForPRE)
                 {
-                    unsigned startingRank = nextRank;
-                    unsigned startingBank = nextBank;
+                    //unsigned startingRank = nextRank;
+                    //unsigned startingBank = nextBank;
                     //bool foundIssuable = false;
                     vector<BusPacket *> &queue = getCommandQueue(nextRank,nextBank);
                     //make sure there is something there first
@@ -603,14 +533,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 //PRINT("issued packet bank = " << packet->bank);
                                 //PRINT("issued packet type = " << packet->busPacketType);
                                 //PRINT("");
-                                //check to see if the packet has not been accessed before
-                                // and if so, we could count it as a hit
-                                /*
-                                if (packet->hasBeenAccessed == false)
-                                {
-                                    hit(*busPacket);
-                                }
-                                 */
                                 hit(*busPacket);
                                 bankAccess(*busPacket);
                                 //if the bus packet before is an activate, that is the act that was
@@ -665,47 +587,134 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 for (size_t i=0;i<queue.size();i++)
                                 {
                                     //if there is something going to that bank and row, then we don't want to send a PRE
+                                    /*
                                     if (queue[i]->bank == nextBankPRE &&
                                         queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress)
                                     {
                                         found = true;
                                         break;
                                     }
+                                    */
+                                    if (ENABLE_RESTORE)
+                                    {
+                                        for (size_t i=0;i<queue.size();i++)
+                                        {
+                                            //if there is something going to that bank and row, then we don't want to send a PRE
+                                            if (queue[i]->bank == nextBankPRE &&
+                                                queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress)
+                                            {
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        for (size_t i=0;i<queue.size();i++)
+                                        {
+                                            //if there is something going to that bank and row, then we don't want to send a PRE
+                                            if (queue[i]->bank == nextBankPRE &&
+                                                queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress && bankStates[nextRankPRE][nextBankPRE].lastCommand == ACTIVATE)
+                                            {
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                    }
                                 }
                                 
                                 //if nothing found going to that bank and row or too many accesses have happend, close it
                                 if (!found || rowAccessCounters[nextRankPRE][nextBankPRE]==TOTAL_ROW_ACCESSES)
                                 {
+                                    /*
                                     if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextPrecharge)
                                     {
                                         sendingPRE = true;
-                                        rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
                                         *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
                                         //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+                                        if (ENABLE_RESTORE)
+                                        {
+                                            if (bankStates[nextRankPRE][nextBankPRE].currentBankState == RowActive)
+                                            {
+                                                if (openPageRestoreDone[nextRankPRE][nextBankPRE] == false)
+                                                {
+                                                    
+                                                    sendingPRE = false;
+                                                    delete *busPacket;
+                                                    
+                                                    if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextWrite)
+                                                    {
+                                                        *busPacket = new BusPacket(WRITE_RESTORE_PAGE, 0, 0, bankStates[nextRankPRE][nextBankPRE].openRowAddress, nextRankPRE, nextBankPRE, 0, dramsim_log);
+                                                        sendingPRE = true;
+                                                        openPageRestoreDone[nextRankPRE][nextBankPRE] =true;
+                                                        break;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    openPageRestoreDone[nextRankPRE][nextBankPRE] = false;
+                                                    rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                                    break;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                PRINT("bank state : " << bankStates[nextRankPRE][nextBankPRE].currentBankState);
+                                                break;
+                                            }
+                                        }
+                                        rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+
                                         foundIssuable = true;
+                                        break;
+                                    }
+                                    */
+                                    if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextPrecharge)
+                                    {
+                                        sendingPRE = true;
+                                        foundIssuable = true;
+                                        //rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                        *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
+                                        if (ENABLE_RESTORE)
+                                        {
+                                            if (bankStates[nextRankPRE][nextBankPRE].currentBankState == RowActive)
+                                            {
+                                                
+                                                if (openPageRestoreDone[nextRankPRE][nextBankPRE] == false)
+                                                {
+                                                    
+                                                    sendingPRE = false;
+                                                    delete *busPacket;
+                                                    foundIssuable = false;
+                                                    if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextWrite)
+                                                    {
+                                                        *busPacket = new BusPacket(WRITE_RESTORE_PAGE, 0, 0, bankStates[nextRankPRE][nextBankPRE].openRowAddress, nextRankPRE, nextBankPRE, 0, dramsim_log);
+                                                        sendingPRE = true;
+                                                        foundIssuable = true;
+                                                        openPageRestoreDone[nextRankPRE][nextBankPRE] =true;
+                                                        break;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    openPageRestoreDone[nextRankPRE][nextBankPRE] = false;
+                                                    rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                                    break;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                PRINT("bank state : " << bankStates[nextRankPRE][nextBankPRE].currentBankState);
+                                                break;
+                                            }
+                                        }
+                                        
+                                        rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
                                         break;
                                     }
                                 }
                             }
-                            /*
-                            else if (rowIdleProblemForOpenPagePolicy[nextRank][nextBank] == true && bankRowBufferPolicy[nextRankPRE][nextBankPRE] == OpenPage)
-                            {
-                                PRINT("row idle problem");
-                                BusPacket *ACTcommand = new BusPacket(ACTIVATE, queue[0]->physicalAddress, queue[0]->column, queue[0]->row, queue[0]->rank, queue[0]->bank, 0, dramsim_log);
-                                
-                                if (isIssuable(ACTcommand))
-                                {
-                                    
-                                    //PRINT("Activate packet is popped");
-                                    *busPacket = ACTcommand;
-                                    //rowIdleForClosePagePolicy = false;
-                                    rowIdleProblemForClosePagePolicy[nextRankPRE][nextBankPRE] = false;
-                                    foundIssuable = true;
-                                }
-                            }
-                             */
                             
-                        
                             nextRankAndBank(nextRankPRE, nextBankPRE);
                         }
                         
@@ -821,7 +830,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                     {
                         if (queuingStructure == PerRank)
                         {
-                            
                             //search from beginning to find first issuable bus packet
                             for (size_t i=0;i<queue.size();i++)
                             {
@@ -831,62 +839,124 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     if (i>0 && queue[i-1]->busPacketType==ACTIVATE &&
                                         queue[i-1]->physicalAddress == queue[i]->physicalAddress)
                                         continue;
-                                    
                                     *busPacket = queue[i];
-                                    //check to see if the packet has not been accessed before
-                                    // and if so, we could count it as a hit
-                                    /*
-                                    if (queue[i]->hasBeenAccessed == false)
-                                    {
-                                        hit(*busPacket);
-                                    }
-                                    bankAccess(*busPacket);
-                                    */
-                                    //hit(*busPacket);
-                                    //bankAccess(*busPacket);
-                                    //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
                                     queue.erase(queue.begin()+i);
                                     foundIssuable = true;
+                                    hit(*busPacket);
+                                    bankAccess(*busPacket);
                                     break;
-                                }
-                                else
-                                {
-                                    queue[i]->hasBeenAccessed = true;
-                                    bankAccess(queue[i]);
-
                                 }
                             }
                         }
                         else
                         {
+                            if (HYBRID_PAGE_POLICY_FLAG)
+                            {
+                                if (rowAccessCounters[queue[0]->rank][queue[0]->bank] == TOTAL_ROW_ACCESSES)
+                                {
+                                    rowAccessCounters[queue[0]->rank][queue[0]->bank]--;
+                                }
+                            }
                             if (isIssuable(queue[0]))
                             {
-                                
                                 //no need to search because if the front can't be sent,
                                 // then no chance something behind it can go instead
                                 *busPacket = queue[0];
-                                //check to see if the packet has not been accessed before
-                                // and if so, we could count it as a hit
-                                /*
-                                if (queue[0]->hasBeenAccessed == false)
-                                {
-                                    hit(*busPacket);
-                                }
-                                bankAccess(*busPacket);
-                                */
                                 queue.erase(queue.begin());
+                                hit(*busPacket);
+                                bankAccess(*busPacket);
                                 foundIssuable = true;
                             }
-                            /*
-                            else
-                            {
-                                queue[0]->hasBeenAccessed = true;
-                                bankAccess(queue[0]);
-                            }
-                             */
                         }
                         
+                        if (foundIssuable == false)
+                        {
+                            if (HYBRID_PAGE_POLICY_FLAG == true)
+                            {
+                                
+                                //PRINT("not found");
+                                if (ENABLE_RESTORE == true)
+                                {
+                                    //PRINT("not found");
+                                    /*
+                                     PRINT("last command: " << bankStates[nextRank][nextBank].lastCommand);
+                                     PRINT("current bank state: " << bankStates[nextRank][nextBank].currentBankState);
+                                     PRINT("bus packet type " << queue[0]->busPacketType);
+                                     PRINT("bus packet row " << queue[0]->row);
+                                     PRINT("bank open row " << bankStates[nextRank][nextBank].openRowAddress);
+                                     PRINT("total row access: " << rowAccessCounters[nextRank][nextBank]);
+                                     */
+                                    if ((bankStates[nextRank][nextBank].lastCommand == READ || bankStates[nextRank][nextBank].lastCommand == WRITE || bankStates[nextRank][nextBank].lastCommand == ACTIVATE) && bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row != bankStates[nextRank][nextBank].openRowAddress)
+                                    {
+                                        if (queue[0]->busPacketType == ACTIVATE)
+                                        {
+                                            
+                                            if (currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                            {
+                                                if (openPageRestoreDone[nextRank][nextBank] == false)
+                                                {
+                                                    if (currentClockCycle >= bankStates[nextRank][nextBank].nextWrite)
+                                                    {
+                                                        *busPacket = new BusPacket(WRITE_RESTORE_PAGE, 0, 0, bankStates[nextRank][nextBank].openRowAddress, nextRank, nextBank, 0, dramsim_log);
+                                                        openPageRestoreDone[nextRank][nextBank] = true;
+                                                        foundIssuable = true;
+                                                        //break;
+                                                    }
+                                                }
+                                                //else if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge && bankStates[nextRank][nextBank].lastCommand != ACTIVATE)
+                                                else if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge)
+                                                    
+                                                {
+                                                    //PRINT("precharge row");
+                                                    *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRank, nextBank, 0, dramsim_log);
+                                                    
+                                                    foundIssuable = true;
+                                                    
+                                                    openPageRestoreDone[nextRank][nextBank] = false;
+                                                    //break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else if (bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row == bankStates[nextRank][nextBank].openRowAddress && currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                    {
+                                        queue.erase(queue.begin());
+                                    }
+                                }
+                                
+                                else
+                                {
+                                    /*
+                                     PRINT("last command: " << bankStates[nextRank][nextBank].lastCommand);
+                                     PRINT("current bank state: " << bankStates[nextRank][nextBank].currentBankState);
+                                     PRINT("bus packet type " << queue[0]->busPacketType);
+                                     PRINT("bus packet row " << queue[0]->row);
+                                     PRINT("bank open row " << bankStates[nextRank][nextBank].openRowAddress);
+                                     PRINT("total row access: " << rowAccessCounters[nextRank][nextBank]);
+                                     */
+                                    if ((bankStates[nextRank][nextBank].lastCommand == READ || bankStates[nextRank][nextBank].lastCommand == WRITE) && bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row != bankStates[nextRank][nextBank].openRowAddress)
+                                    {
+                                        if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge)
+                                            
+                                        {
+                                            //PRINT("precharge row");
+                                            *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRank, nextBank, 0, dramsim_log);
+                                            
+                                            foundIssuable = true;
+                                            
+                                            openPageRestoreDone[nextRank][nextBank] = false;
+                                            //break;
+                                        }
+                                    }
+                                    else if (bankStates[nextRank][nextBank].currentBankState == RowActive && queue[0]->busPacketType == ACTIVATE && queue[0]->row == bankStates[nextRank][nextBank].openRowAddress && currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                    {
+                                        queue.erase(queue.begin());
+                                    }
+                                }
+                            }
+                        }
                     }
+                    
                     
                     //if we found something, break out of do-while
                     if (foundIssuable)
@@ -1000,148 +1070,419 @@ bool CommandQueue::pop(BusPacket **busPacket)
                 unsigned startingRank = nextRank;
                 unsigned startingBank = nextBank;
                 bool foundIssuable = false;
-                do // round robin over queues
+                if (FIFO_OPEN_PAGE_SCHEDULING == true)
                 {
-                    vector<BusPacket *> &queue = getCommandQueue(nextRank,nextBank);
-                    //make sure there is something there first
-                    if (!queue.empty() && !((nextRank == refreshRank) && refreshWaiting))
+                    
+                    do // round robin over queues
                     {
-                        //search from the beginning to find first issuable bus packet
-                        for (size_t i=0;i<queue.size();i++)
+                        vector<BusPacket *> &queue = getCommandQueue(nextRank,nextBank);
+                        if (!queue.empty() && !((nextRank == refreshRank) && refreshWaiting))
                         {
-                            BusPacket *packet = queue[i];
-                            if (isIssuable(packet))
+                            if (queuingStructure == PerRank)
                             {
-                                //check for dependencies
-                                bool dependencyFound = false;
-                                for (size_t j=0;j<i;j++)
+                                //make sure there is something there first
+                                
+                                //search from the beginning to find first issuable bus packet
+                                for (size_t i=0;i<queue.size();i++)
                                 {
-                                    BusPacket *prevPacket = queue[j];
-                                    if (prevPacket->busPacketType != ACTIVATE &&
-                                        prevPacket->bank == packet->bank &&
-                                        prevPacket->row == packet->row)
+                                    BusPacket *packet = queue[i];
+                                    if (isIssuable(packet))
                                     {
-                                        dependencyFound = true;
+                                        //check for dependencies
+                                        bool dependencyFound = false;
+                                        for (size_t j=0;j<i;j++)
+                                        {
+                                            BusPacket *prevPacket = queue[j];
+                                            if (prevPacket->busPacketType != ACTIVATE &&
+                                                prevPacket->bank == packet->bank &&
+                                                prevPacket->row == packet->row)
+                                            {
+                                                dependencyFound = true;
+                                                break;
+                                            }
+                                        }
+                                        if (dependencyFound) continue;
+                                        
+                                        *busPacket = packet;
+                                        
+                                        //if the bus packet before is an activate, that is the act that was
+                                        //	paired with the column access we are removing, so we have to remove
+                                        //	that activate as well (check i>0 because if i==0 then theres nothing before it)
+                                        if (i>0 && queue[i-1]->busPacketType == ACTIVATE)
+                                        {
+                                            rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+                                            // i is being returned, but i-1 is being thrown away, so must delete it here
+                                            delete (queue[i-1]);
+                                            
+                                            // remove both i-1 (the activate) and i (we've saved the pointer in *busPacket)
+                                            queue.erase(queue.begin()+i-1,queue.begin()+i+1);
+                                        }
+                                        else // there's no activate before this packet
+                                        {
+                                            //or just remove the one bus packet
+                                            queue.erase(queue.begin()+i);
+                                        }
+                                        foundIssuable = true;
                                         break;
+                                        
                                     }
-                                }
-                                if (dependencyFound) continue;
-                                
-                                *busPacket = packet;
-                                
-                                //check to see if the packet has not been accessed before
-                                // and if so, we could count it as a hit
-                                /*
-                                if (packet->hasBeenAccessed == false)
-                                {
-                                    hit(*busPacket);
-                                }
-                                */
-                                //bankAccess(*busPacket);
-                                //if the bus packet before is an activate, that is the act that was
-                                //	paired with the column access we are removing, so we have to remove
-                                //	that activate as well (check i>0 because if i==0 then theres nothing before it)
-                                if (i>0 && queue[i-1]->busPacketType == ACTIVATE)
-                                {
-                                    rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
-                                    // i is being returned, but i-1 is being thrown away, so must delete it here
-                                    delete (queue[i-1]);
-                                    
-                                    // remove both i-1 (the activate) and i (we've saved the pointer in *busPacket)
-                                    queue.erase(queue.begin()+i-1,queue.begin()+i+1);
-                                }
-                                else // there's no activate before this packet
-                                {
-                                    //or just remove the one bus packet
-                                    queue.erase(queue.begin()+i);
-                                }
-                                
-                                foundIssuable = true;
-                                break;
-                            }
-                            /*
-                            else
-                            {
-                                packet->hasBeenAccessed = true;
-                                bankAccess(packet);
-                            }
-                            */
-                        }
-                    }
-                    
-                    //if we found something, break out of do-while
-                    if (foundIssuable)
-                    {
-                        //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
-                        break;
-                    }
-                    
-                    //rank round robin
-                    if (queuingStructure == PerRank)
-                    {
-                        nextRank = (nextRank + 1) % NUM_RANKS;
-                        if (startingRank == nextRank)
-                        {
-                            break;
-                        }
-                    }
-                    else 
-                    {
-                        nextRankAndBank(nextRank, nextBank); 
-                        if (startingRank == nextRank && startingBank == nextBank)
-                        {
-                            break;
-                        }
-                    }
-                }
-                while (true);
-                
-                //if nothing was issuable, see if we can issue a PRE to an open bank
-                //	that has no other commands waiting
-                if (!foundIssuable)
-                {
-                    //search for banks to close
-                    bool sendingPRE = false;
-                    unsigned startingRank = nextRankPRE;
-                    unsigned startingBank = nextBankPRE;
-                    
-                    do // round robin over all ranks and banks
-                    {
-                        vector <BusPacket *> &queue = getCommandQueue(nextRankPRE, nextBankPRE);
-                        bool found = false;
-                        //check if bank is open
-                        if (bankStates[nextRankPRE][nextBankPRE].currentBankState == RowActive)
-                        {
-                            for (size_t i=0;i<queue.size();i++)
-                            {
-                                //if there is something going to that bank and row, then we don't want to send a PRE
-                                if (queue[i]->bank == nextBankPRE &&
-                                    queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress)
-                                {
-                                    found = true;
-                                    break;
                                 }
                             }
                             
-                            //if nothing found going to that bank and row or too many accesses have happend, close it
-                            if (!found || rowAccessCounters[nextRankPRE][nextBankPRE]==TOTAL_ROW_ACCESSES)
+                            else
                             {
-                                if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextPrecharge)
+                                /*
+                                if (rowAccessCounters[queue[0]->rank][queue[0]->bank] == TOTAL_ROW_ACCESSES)
                                 {
-                                    sendingPRE = true;
-                                    rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
-                                    *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
-                                    //bankAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+                                    rowAccessCounters[queue[0]->rank][queue[0]->bank]--;
+                                }
+                                 */
+                                if (isIssuable(queue[0]))
+                                {
+                                    //no need to search because if the front can't be sent,
+                                    // then no chance something behind it can go instead
+                                    *busPacket = queue[0];
+                                    queue.erase(queue.begin());
+                                    foundIssuable = true;
+                                }
+                                
+                                
+                            }
+                        }
+                        //if we found something, break out of do-while
+                        if (foundIssuable)
+                        {
+                            break;
+                        }
+                        
+                        //rank round robin
+                        if (queuingStructure == PerRank)
+                        {
+                            nextRank = (nextRank + 1) % NUM_RANKS;
+                            if (startingRank == nextRank)
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            nextRankAndBank(nextRank, nextBank);
+                            if (startingRank == nextRank && startingBank == nextBank)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    while (true);
+                    
+                    //if nothing was issuable, see if we can issue a PRE to an open bank
+                    //	that has no other commands waiting
+                    if (!foundIssuable)
+                    {
+                        //search for banks to close
+                        bool sendingPRE = false;
+                        unsigned startingRank = nextRankPRE;
+                        unsigned startingBank = nextBankPRE;
+                        
+                        do // round robin over all ranks and banks
+                        {
+                            vector <BusPacket *> &queue = getCommandQueue(nextRankPRE, nextBankPRE);
+                            bool found = false;
+                            //check if bank is open
+                            if (bankStates[nextRankPRE][nextBankPRE].currentBankState == RowActive)
+                            {
+                                if (queue[0]->restoreWrite == true)
+                                {
+                                    found = true;
+                                }
+                                /*
+                                for (size_t i=0;i<queue.size();i++)
+                                {
+                                    //if there is something going to that bank and row, then we don't want to send a PRE
+                                    
+                                    if (queue[i]->bank == nextBankPRE &&
+                                        queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress)
+                                    {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                */
+                                
+                                
+                                //if nothing found going to that bank and row or too many accesses have happend, close it
+                                if (!found || rowAccessCounters[nextRankPRE][nextBankPRE]==TOTAL_ROW_ACCESSES)
+                                {
+                                    if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextPrecharge && bankStates[nextRankPRE][nextBankPRE].lastCommand != ACTIVATE )
+                                    {
+                                        sendingPRE = true;
+                                        
+                                        //rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                        *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
+                                        
+                                        if (ENABLE_RESTORE)
+                                        {
+                                            if (bankStates[nextRankPRE][nextBankPRE].currentBankState == RowActive)
+                                            {
+                                                if (openPageRestoreDone[nextRankPRE][nextBankPRE] == false)
+                                                {
+                                                    
+                                                    sendingPRE = false;
+                                                    delete *busPacket;
+                                                    
+                                                    if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextWrite)
+                                                    {
+                                                        *busPacket = new BusPacket(WRITE, 0, 0, bankStates[nextRankPRE][nextBankPRE].openRowAddress, nextRankPRE, nextBankPRE, 0, dramsim_log);
+                                                        sendingPRE = true;
+                                                        openPageRestoreDone[nextRankPRE][nextBankPRE] =true;
+                                                        break;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    openPageRestoreDone[nextRankPRE][nextBankPRE] = false;
+                                                    rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                                    break;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                PRINT("bank state : " << bankStates[nextRankPRE][nextBankPRE].currentBankState);
+                                                break;
+                                            }
+                                        }
+                                        
+                                        rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                        break;
+                                    }
+                                }
+                            }
+                            nextRankAndBank(nextRankPRE, nextBankPRE);
+                        }
+                        while (!(startingRank == nextRankPRE && startingBank == nextBankPRE));
+                        
+                        //if no PREs could be sent, just return false
+                        if (!sendingPRE) return false;
+                    }
+                }
+                else
+                {
+                    do // round robin over queues
+                    {
+                        vector<BusPacket *> &queue = getCommandQueue(nextRank,nextBank);
+                        //make sure there is something there first
+                        if (!queue.empty() && !((nextRank == refreshRank) && refreshWaiting))
+                        {
+                            //search from the beginning to find first issuable bus packet
+                            for (size_t i=0;i<queue.size();i++)
+                            {
+                                BusPacket *packet = queue[i];
+                                if (isIssuable(packet))
+                                {
+                                    //check for dependencies
+                                    bool dependencyFound = false;
+                                    for (size_t j=0;j<i;j++)
+                                    {
+                                        BusPacket *prevPacket = queue[j];
+                                        if (prevPacket->busPacketType != ACTIVATE &&
+                                            prevPacket->bank == packet->bank &&
+                                            prevPacket->row == packet->row)
+                                        {
+                                            dependencyFound = true;
+                                            break;
+                                        }
+                                    }
+                                    if (dependencyFound) continue;
+                                    
+                                    *busPacket = packet;
+                                    hit(*busPacket);
+                                    bankAccess(*busPacket);
+                                    //if the bus packet before is an activate, that is the act that was
+                                    //	paired with the column access we are removing, so we have to remove
+                                    //	that activate as well (check i>0 because if i==0 then theres nothing before it)
+                                    /*
+                                    if (ENABLE_RESTORE)
+                                    {
+                                        if (packet->busPacketType == WRITE_RESTORE_PAGE)
+                                        {
+                                            PRINT("write restore is true");
+                                            openPageRestoreDone[packet->rank][packet->bank] = true;
+                                        }
+                                        else
+                                        {
+                                            PRINT("write restore is false");
+                                            openPageRestoreDone[packet->rank][packet->bank] = false;
+                                        }
+                                    }
+                                    */
+                                    if (i>0 && queue[i-1]->busPacketType == ACTIVATE)
+                                    {
+                                        rowAccessCounters[(*busPacket)->rank][(*busPacket)->bank]++;
+                                        // i is being returned, but i-1 is being thrown away, so must delete it here
+                                        delete (queue[i-1]);
+                                        
+                                        // remove both i-1 (the activate) and i (we've saved the pointer in *busPacket)
+                                        queue.erase(queue.begin()+i-1,queue.begin()+i+1);
+                                    }
+                                    else // there's no activate before this packet
+                                    {
+                                        //or just remove the one bus packet
+                                        queue.erase(queue.begin()+i);
+                                    }
+                                    foundIssuable = true;
                                     break;
+                                    
                                 }
                             }
                         }
-                        nextRankAndBank(nextRankPRE, nextBankPRE);
+                        
+                        //if we found something, break out of do-while
+                        if (foundIssuable)
+                        {
+                            break;
+                        }
+                        
+                        //rank round robin
+                        if (queuingStructure == PerRank)
+                        {
+                            nextRank = (nextRank + 1) % NUM_RANKS;
+                            if (startingRank == nextRank)
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            nextRankAndBank(nextRank, nextBank);
+                            if (startingRank == nextRank && startingBank == nextBank)
+                            {
+                                break;
+                            }
+                        }
                     }
-                    while (!(startingRank == nextRankPRE && startingBank == nextBankPRE));
+                    while (true);
                     
-                    //if no PREs could be sent, just return false
-                    if (!sendingPRE) return false;
+                    //if nothing was issuable, see if we can issue a PRE to an open bank
+                    //	that has no other commands waiting
+                    if (!foundIssuable)
+                    {
+                        //search for banks to close
+                        bool sendingPRE = false;
+                        unsigned startingRank = nextRankPRE;
+                        unsigned startingBank = nextBankPRE;
+                        
+                        do // round robin over all ranks and banks
+                        {
+                            vector <BusPacket *> &queue = getCommandQueue(nextRankPRE, nextBankPRE);
+                            bool found = false;
+                            //check if bank is open
+                            if (bankStates[nextRankPRE][nextBankPRE].currentBankState == RowActive)
+                            {
+                                if (ENABLE_RESTORE)
+                                {
+                                    for (size_t i=0;i<queue.size();i++)
+                                    {
+                                        //if there is something going to that bank and row, then we don't want to send a PRE
+                                        if (queue[i]->bank == nextBankPRE &&
+                                            queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress)
+                                        {
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    for (size_t i=0;i<queue.size();i++)
+                                    {
+                                        //if there is something going to that bank and row, then we don't want to send a PRE
+                                        if (HYBRID_PAGE_POLICY_FLAG)
+                                        {
+                                            if (queue[i]->bank == nextBankPRE &&
+                                                queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress && bankStates[nextRankPRE][nextBankPRE].lastCommand == ACTIVATE)
+                                            {
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (queue[i]->bank == nextBankPRE &&
+                                                queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress)
+                                            {
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                /*
+                                 for (size_t i=0;i<queue.size();i++)
+                                 {
+                                 //if there is something going to that bank and row, then we don't want to send a PRE
+                                 if (queue[i]->bank == nextBankPRE &&
+                                 queue[i]->row == bankStates[nextRankPRE][nextBankPRE].openRowAddress)
+                                 {
+                                 found = true;
+                                 break;
+                                 }
+                                 }
+                                */
+                                
+                                //if nothing found going to that bank and row or too many accesses have happend, close it
+                                if (!found || rowAccessCounters[nextRankPRE][nextBankPRE]==TOTAL_ROW_ACCESSES)
+                                {
+                                    if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextPrecharge)
+                                    {
+                                        sendingPRE = true;
+                                        //rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                        *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRankPRE, nextBankPRE, 0, dramsim_log);
+                                        if (ENABLE_RESTORE)
+                                        {
+                                            if (bankStates[nextRankPRE][nextBankPRE].currentBankState == RowActive)
+                                            {
+                                                
+                                                if (openPageRestoreDone[nextRankPRE][nextBankPRE] == false)
+                                                {
+                                                    
+                                                    sendingPRE = false;
+                                                    delete *busPacket;
+                                                    
+                                                    if (currentClockCycle >= bankStates[nextRankPRE][nextBankPRE].nextWrite)
+                                                    {
+                                                        *busPacket = new BusPacket(WRITE_RESTORE_PAGE, 0, 0, bankStates[nextRankPRE][nextBankPRE].openRowAddress, nextRankPRE, nextBankPRE, 0, dramsim_log);
+                                                        sendingPRE = true;
+                                                        openPageRestoreDone[nextRankPRE][nextBankPRE] =true;
+                                                        break;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    openPageRestoreDone[nextRankPRE][nextBankPRE] = false;
+                                                    rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                                    break;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                PRINT("bank state : " << bankStates[nextRankPRE][nextBankPRE].currentBankState);
+                                                break;
+                                            }
+                                        }
+                                        
+                                        rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
+                                        break;
+                                    }
+                                }
+                            }
+                            nextRankAndBank(nextRankPRE, nextBankPRE);
+                        }
+                        while (!(startingRank == nextRankPRE && startingBank == nextBankPRE));
+                        
+                        //if no PREs could be sent, just return false
+                        if (!sendingPRE) return false;
+                    }
                 }
             }
         }
@@ -1285,7 +1626,6 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 
 		break;
 	case ACTIVATE:
-            
         //PRINT("Activate rank/bank " << busPacket->rank << "/" << busPacket->bank);
         //PRINT("current bank state " << bankStates[busPacket->rank][busPacket->bank].currentBankState);
         //PRINT("last command " << bankStates[busPacket->rank][busPacket->bank].lastCommand);
@@ -1311,12 +1651,14 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 		}
 		else
 		{
+            /*
             //if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextPrecharge && bankStates[busPacket->rank][busPacket->bank].lastCommand == ACTIVATE)
             if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextPrecharge && bankStates[busPacket->rank][busPacket->bank].lastCommand == ACTIVATE)
             {
                 //rowActiveForClosePagePolicy = true;
                 rowActiveProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
             }
+             */
 			return false;
 		}
 		break;
@@ -1328,10 +1670,16 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
             rowIdleForClosePagePolicy = true;
         }
              */
+        /*
+        if (busPacket->busPacketType == WRITE && HYBRID_PAGE_POLICY_FLAG == true && DISTRIBUTED_PAGE_POLICY_FLAG == false && rowBufferPolicy == ClosePage && rowAccessCounters[busPacket->rank][busPacket->bank] == TOTAL_ROW_ACCESSES)
+        {
+            rowAccessCounters[busPacket->rank][busPacket->bank]--;
+        }
         if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage)
         {
             rowAccessCounters[busPacket->rank][busPacket->bank] = 0;
         }
+         */
 		if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&
 		        currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextWrite &&
 		        busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress &&
@@ -1342,6 +1690,7 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 		}
 		else
 		{
+            /*
             if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
             {
                 //rowIdleForClosePagePolicy = true;
@@ -1351,6 +1700,7 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
             {
                 readWriteRowActiveProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
             }
+             */
 			return false;
 		}
 		break;
@@ -1395,6 +1745,7 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
             /*
             if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
              */
+            /*
             if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && rowAccessCounters[busPacket->rank][busPacket->bank] >= TOTAL_ROW_ACCESSES)
             {
                 rowAccessCounters[busPacket->rank][busPacket->bank] = 0;
@@ -1422,6 +1773,7 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
                     rowIdleProblemForOpenPagePolicy[busPacket->rank][busPacket->bank] = true;
                 }
             }
+             */
 			return false;
 		}
 		break;
@@ -1436,6 +1788,20 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 			return false;
 		}
 		break;
+    
+    case WRITE_RESTORE_PAGE:
+            if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive &&
+                currentClockCycle >= bankStates[busPacket->rank][busPacket->bank].nextWrite &&
+                busPacket->row == bankStates[busPacket->rank][busPacket->bank].openRowAddress)
+            {
+                //rowAccessCounters[busPacket->rank][busPacket->bank]--;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+    
 	default:
 		ERROR("== Error - Trying to issue a crazy bus packet type : ");
 		busPacket->print();

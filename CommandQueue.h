@@ -89,6 +89,7 @@ public:
     vector< vector<RowBufferPolicy> > bankRowBufferPolicy;
     vector< vector<BusPacket *> > previousPacketsArray;
     vector< vector<bool> > switchedToClosePage;
+    vector< vector<bool> > openPageRestoreDone;
 
 
 private:
