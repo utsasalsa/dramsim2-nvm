@@ -1045,7 +1045,7 @@ void MemoryController::resetStats()
     if (HYBRID_PAGE_POLICY_FLAG == true)
     {
         //double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
-        double threshold = 0.1;
+        double threshold = 0.6;
         //double threshold = 0.01;
         //PRINT("Total open page transactions = " << totalOpenPageTransactions);
         //PRINT("Total close page transactions = " << totalClosePageTransactions);
