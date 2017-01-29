@@ -110,7 +110,9 @@ void Rank::receiveFromBus(BusPacket *packet)
 		for (size_t i=0;i<NUM_BANKS;i++)
 		{
 			bankStates[i].nextRead = max(bankStates[i].nextRead, currentClockCycle + max(tCCD, BL/2));
-			bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY);
+			//bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY); // original calculation
+            bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY_B);
+            
 		}
 
 		//get the read data and put it in the storage which delays until the appropriate time (RL)
@@ -139,7 +141,9 @@ void Rank::receiveFromBus(BusPacket *packet)
 		{
 			//will set next read/write for all banks - including current (which shouldnt matter since its now idle)
 			bankStates[i].nextRead = max(bankStates[i].nextRead, currentClockCycle + max(BL/2, tCCD));
-			bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY);
+			//bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY);
+            bankStates[i].nextWrite = max(bankStates[i].nextWrite, currentClockCycle + READ_TO_WRITE_DELAY_B);
+
 		}
 
 		//get the read data and put it in the storage which delays until the appropriate time (RL)

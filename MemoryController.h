@@ -129,6 +129,7 @@ private:
     
     unsigned unifiedNumberOfOpenPageSwitching;
     unsigned unifiedNumberOfClosePageSwitching;
+    unsigned pagePolicyTwoBitCounter;
     
     vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
     vector< vector<unsigned> > distributedNumberOfClosePageSwitching;
@@ -137,7 +138,6 @@ private:
     vector< vector<bool> > firstRankBankTransaction;
     uint64_t totalClosePageTransactions;
     uint64_t totalOpenPageTransactions;
-    
     
 public:
     

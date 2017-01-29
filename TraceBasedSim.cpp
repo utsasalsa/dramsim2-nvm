@@ -573,7 +573,6 @@ int main(int argc, char **argv)
     enum TransactionType transType;
     
     void *data = NULL;
-    int lineNumber = 0;
     Transaction *trans = NULL;
     Transaction *transRestore = NULL;
     bool pendingTrans = false;

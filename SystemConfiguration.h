@@ -119,10 +119,18 @@ extern unsigned tCMD;
 extern unsigned NUM_DEVICES;
 
 //same bank
-#define READ_TO_PRE_DELAY (AL+BL/2+ max(tRTP,tCCD)-tCCD)
+//#define READ_TO_PRE_DELAY (AL+BL/2+ max(tRTP,tCCD)-tCCD) //original calculation
+#define READ_TO_PRE_DELAY (RL+BL/2+2)
+
 #define WRITE_TO_PRE_DELAY (WL+BL/2+tWR)
-#define READ_TO_WRITE_DELAY (RL+BL/2+tRTRS-WL)
-#define READ_AUTOPRE_DELAY (AL+tRTP+tRP)
+
+//#define READ_TO_WRITE_DELAY (RL+BL/2+tRTRS-WL) //original equation for both interrank and interbank
+#define READ_TO_WRITE_DELAY_B (RL+BL/2+2-WL) //interbank
+#define READ_TO_WRITE_DELAY_R (RL+BL/2+tRTRS-WL) //interrank
+
+//#define READ_AUTOPRE_DELAY (AL+tRTP+tRP) // original calculation
+#define READ_AUTOPRE_DELAY (RL+BL/2+2+tRP)
+
 #define WRITE_AUTOPRE_DELAY (WL+BL/2+tWR+tRP)
 #define WRITE_TO_READ_DELAY_B (WL+BL/2+tWTR) //interbank
 #define WRITE_TO_READ_DELAY_R (WL+BL/2+tRTRS-RL) //interrank
