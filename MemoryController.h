@@ -127,9 +127,16 @@ private:
 	unsigned refreshRank;
     bool prechargeFlag;
     
+    //Hybrid page policy statistical variables
     unsigned unifiedNumberOfOpenPageSwitching;
     unsigned unifiedNumberOfClosePageSwitching;
+    unsigned unifiedTotalNumberOfPageSwitching;
     unsigned pagePolicyTwoBitCounter;
+    
+    //RowBufferPolicy previousPagePolicy;
+    unsigned pagePolicyCorrectPredictionCounter;
+    double pagePolicyPredictionAccuracy;
+    
     
     vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
     vector< vector<unsigned> > distributedNumberOfClosePageSwitching;

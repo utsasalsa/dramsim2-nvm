@@ -71,6 +71,9 @@ refreshRank(0),
 prechargeFlag(false),
 unifiedNumberOfOpenPageSwitching(0),
 unifiedNumberOfClosePageSwitching(0),
+unifiedTotalNumberOfPageSwitching(0),
+pagePolicyCorrectPredictionCounter(0),
+pagePolicyPredictionAccuracy(0),
 totalClosePageTransactions(0),
 totalOpenPageTransactions(0)
 {
@@ -369,44 +372,23 @@ void MemoryController::update()
                     PRINT(" ++ Adding Read energy to total energy");
                 }
                 burstEnergy[rank] += (IDD4R - IDD3N) * BL/2 * NUM_DEVICES;
-                //if (HYBRID_PAGE_POLICY_FLAG == false || DISTRIBUTED_PAGE_POLICY_FLAG == false)
-                //{
-                    if (poppedBusPacket->busPacketType == READ_P)
-                    {
-                        //Don't bother setting next read or write times because the bank is no longer active
-                        bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
-                                                                  bankStates[rank][bank].nextActivate);
-                        bankStates[rank][bank].lastCommand = READ_P;
-                        bankStates[rank][bank].stateChangeCountdown = READ_TO_PRE_DELAY;
-                    }
-                    else if (poppedBusPacket->busPacketType == READ)
-                    {
-                        bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
-                                                                   bankStates[rank][bank].nextPrecharge);
-                        bankStates[rank][bank].lastCommand = READ;
-                        
-                    }
-                //}
-                /*
-                else
+                
+                if (poppedBusPacket->busPacketType == READ_P)
                 {
-                    if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
-                    {
-                        //Don't bother setting next read or write times because the bank is no longer active
-                        bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
-                                                                  bankStates[rank][bank].nextActivate);
-                        bankStates[rank][bank].lastCommand = READ_P;
-                        bankStates[rank][bank].stateChangeCountdown = READ_TO_PRE_DELAY;
-                    }
-                    else if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == OpenPage)
-                    {
-                        bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
-                                                                   bankStates[rank][bank].nextPrecharge);
-                        bankStates[rank][bank].lastCommand = READ;
-                        
-                    }
+                    //Don't bother setting next read or write times because the bank is no longer active
+                    bankStates[rank][bank].nextActivate = max(currentClockCycle + READ_AUTOPRE_DELAY,
+                                                              bankStates[rank][bank].nextActivate);
+                    bankStates[rank][bank].lastCommand = READ_P;
+                    bankStates[rank][bank].stateChangeCountdown = READ_TO_PRE_DELAY;
                 }
-                */
+                else if (poppedBusPacket->busPacketType == READ)
+                {
+                    bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
+                                                               bankStates[rank][bank].nextPrecharge);
+                    bankStates[rank][bank].lastCommand = READ;
+                    
+                }
+                
                 for (size_t i=0;i<NUM_RANKS;i++)
                 {
                     for (size_t j=0;j<NUM_BANKS;j++)
@@ -429,10 +411,6 @@ void MemoryController::update()
                         else
                         {
                             bankStates[i][j].nextRead = max(currentClockCycle + max(tCCD, BL/2), bankStates[i][j].nextRead);
-                            /*
-                            bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY,
-                                                             bankStates[i][j].nextWrite);
-                            */
                             bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY_B,
                                                              bankStates[i][j].nextWrite);
 
@@ -440,49 +418,15 @@ void MemoryController::update()
                     }
                 }
                 
-                //if (HYBRID_PAGE_POLICY_FLAG == false || DISTRIBUTED_PAGE_POLICY_FLAG == false)
-                //{
-                    if (poppedBusPacket->busPacketType == READ_P)
-                    {
-                        bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
-                        bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
-                    }
-                /*
-                }
-                else
-                {
-                    if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
-                    {
-                        //set read and write to nextActivate so the state table will prevent a read or write
-                        //  being issued (in cq.isIssuable())before the bank state has been changed because of the
-                        //  auto-precharge associated with this command
-                        bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
-                        bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
-                    }
-                }
-                */
-                /*
                 if (poppedBusPacket->busPacketType == READ_P)
                 {
                     bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
                     bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
                 }
-                
-                
-                if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
-                {
-                    //set read and write to nextActivate so the state table will prevent a read or write
-                    //  being issued (in cq.isIssuable())before the bank state has been changed because of the
-                    //  auto-precharge associated with this command
-                    bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
-                    bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
-                }
-                */
+
                 break;
             case WRITE_P:
             case WRITE:
-                //if (HYBRID_PAGE_POLICY_FLAG == false || DISTRIBUTED_PAGE_POLICY_FLAG == false)
-                //{
                     if (poppedBusPacket->busPacketType == WRITE_P)
                     {
                         bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
@@ -496,26 +440,6 @@ void MemoryController::update()
                                                                    bankStates[rank][bank].nextPrecharge);
                         bankStates[rank][bank].lastCommand = WRITE;
                     }
-                /*
-                }
-                else
-                {
-                    if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
-                    {
-                        bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
-                                                                  bankStates[rank][bank].nextActivate);
-                        bankStates[rank][bank].lastCommand = WRITE_P;
-                        bankStates[rank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
-                    }
-                    else if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == OpenPage)
-                        
-                    {
-                        bankStates[rank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
-                                                                   bankStates[rank][bank].nextPrecharge);
-                        bankStates[rank][bank].lastCommand = WRITE;
-                    }
-                }
-                */
                 
                 //add energy to account for total
                 if (DEBUG_POWER)
@@ -549,25 +473,11 @@ void MemoryController::update()
                 //set read and write to nextActivate so the state table will prevent a read or write
                 //  being issued (in cq.isIssuable())before the bank state has been changed because of the
                 //  auto-precharge associated with this command
-                //if (HYBRID_PAGE_POLICY_FLAG == false || DISTRIBUTED_PAGE_POLICY_FLAG == false)
-                //{
-                    if (poppedBusPacket->busPacketType == WRITE_P)                        
-                    {
-                        bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
-                        bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
-                    }
-                /*
-                }
-                else
+                if (poppedBusPacket->busPacketType == WRITE_P)
                 {
-                    if (commandQueue.bankRowBufferPolicy[poppedBusPacket->rank][poppedBusPacket->bank] == ClosePage)
-                    
-                    {
-                        bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
-                        bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
-                    }
+                    bankStates[rank][bank].nextRead = bankStates[rank][bank].nextActivate;
+                    bankStates[rank][bank].nextWrite = bankStates[rank][bank].nextActivate;
                 }
-                */
                 
                 break;
             ///////////////////////////////////////////////////////////////////////////
@@ -720,35 +630,6 @@ void MemoryController::update()
             
             
             //now that we know there is room in the command queue, we can remove from the transaction queue
-            /*
-            if (ENABLE_RESTORE == true)
-            {
-                unsigned lastTransactionChan, lastTransactionRank, lastTransactionBank, lastTransactionRow, lastTransactionColumn;
-                uint64_t lastTransactionAddress = lastTransactionAddressArray[newTransactionRank][newTransactionBank];
-                
-                addressMapping(lastTransactionAddress, lastTransactionChan, lastTransactionRank, lastTransactionBank, lastTransactionRow, lastTransactionColumn);
-                
-                
-                if (newTransactionRow != lastTransactionRow && writeRestoreDoneForOpenPage[newTransactionRank][newTransactionBank] == false && rowBufferPolicy == OpenPage && firstRankBankTransaction[newTransactionRank][newTransactionBank] == false)
-                {
-                    transaction = new Transaction(DATA_PAGE_RESTORE, lastTransactionAddress, 0);
-                    writeRestoreDoneForOpenPage[newTransactionRank][newTransactionBank] = true;
-                    addressMapping(lastTransactionAddress, newTransactionChan, newTransactionRank, newTransactionBank, newTransactionRow, newTransactionColumn);
-
-                }
-                else
-                {
-                    firstRankBankTransaction[newTransactionRank][newTransactionBank] = false;
-                    transactionQueue.erase(transactionQueue.begin()+i);
-                    writeRestoreDoneForOpenPage[newTransactionRank][newTransactionBank] = false;
-                    lastTransactionAddressArray[newTransactionRank][newTransactionBank] = transaction->address;
-                }
-            }
-            else
-            {
-                transactionQueue.erase(transactionQueue.begin()+i);
-            }
-            */
             transactionQueue.erase(transactionQueue.begin()+i);
             //create activate command to the row we just translated
             
@@ -778,33 +659,7 @@ void MemoryController::update()
                 //PRINT("restore command added");
                 command->restoreWrite = true;
             }
-            /*
-            if (ENABLE_RESTORE)
-            {
-                if (command->busPacketType == WRITE_P && command->restoreWrite)
-                {
-                    delete ACTcommand;
-                    commandQueue.enqueue(command);
-                }
-                else if (command->busPacketType == WRITE && command->restoreWrite)
-                {
-                    delete ACTcommand;
-                    delete command;
-                    //commandQueue.enqueue(ACTcommand);
-                    //commandQueue.enqueue(command);
-                }
-                else
-                {
-                    commandQueue.enqueue(ACTcommand);
-                    commandQueue.enqueue(command);
-                }
-            }
-            else
-            {
-                commandQueue.enqueue(ACTcommand);
-                commandQueue.enqueue(command);
-            }
-            */
+
             if (ENABLE_RESTORE)
             {
                 if (command->busPacketType == WRITE_P && command->restoreWrite)
@@ -1071,7 +926,15 @@ void MemoryController::resetStats()
     if (HYBRID_PAGE_POLICY_FLAG == true)
     {
         //double threshold = ((double)(tRP + RESTORE_PAGE - RESTORE_LINE) / (double)(tRP + tRCD + RESTORE_PAGE));
-        double threshold = 0.9;
+        double threshold;
+        if (ENABLE_RESTORE == true)
+        {
+            threshold = 0.7;
+        }
+        else
+        {
+            threshold = 0.35;
+        }
         //double threshold = 0.01;
         //PRINT("Total open page transactions = " << totalOpenPageTransactions);
         //PRINT("Total close page transactions = " << totalClosePageTransactions);
@@ -1107,35 +970,6 @@ void MemoryController::resetStats()
                     
                     if (hitRate >= threshold)
                     {
-                        /*
-                        if (pagePolicyTwoBitCounter < 3)
-                        {
-                            pagePolicyTwoBitCounter++;
-                        }
-                        else
-                        {
-                            pagePolicyTwoBitCounter = 3;
-                        }
-                        
-                        //Using two bit counter for switching between open page and close page
-                        if (pagePolicyTwoBitCounter > 1)
-                        {
-                            // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
-                            if (commandQueue.bankRowBufferPolicy[i][j] == ClosePage)
-                            {
-                                distributedNumberOfOpenPageSwitching[i][j]++;
-                            }
-                            
-                            commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
-                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
-                        }
-                        else
-                        {
-                            commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
-                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
-                        }
-                        */
-                        
                         // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
                         if (commandQueue.bankRowBufferPolicy[i][j] == ClosePage)
                         {
@@ -1148,34 +982,6 @@ void MemoryController::resetStats()
                     }
                     else
                     {
-                        /*
-                        if (pagePolicyTwoBitCounter > 0)
-                        {
-                            pagePolicyTwoBitCounter--;
-                        }
-                        else
-                        {
-                            pagePolicyTwoBitCounter = 0;
-                        }
-                        
-                        //Using two bit counter for switching between open page and close page
-                        if (pagePolicyTwoBitCounter < 2)
-                        {
-                            // the conditional statement counts the number of close page switching of a command queue if the last page policy was open page
-                            if (commandQueue.bankRowBufferPolicy[i][j] == OpenPage)
-                            {
-                                distributedNumberOfClosePageSwitching[i][j]++;
-                            }
-                            commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
-                            commandQueue.switchedToClosePage[i][j] = true;
-                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
-                        }
-                        else
-                        {
-                            commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
-                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
-                        }
-                        */
                         // the conditional statement counts the number of close page switching of a command queue if the last page policy was open page
                         if (commandQueue.bankRowBufferPolicy[i][j] == OpenPage)
                         {
@@ -1197,7 +1003,7 @@ void MemoryController::resetStats()
             int openPageHits = 0;
             int closePageHits = 0;
             //PRINT("Threshold = " << threshold);
-            
+            unifiedTotalNumberOfPageSwitching++;
             for (size_t i=0; i<NUM_RANKS; i++)
             {
                 for (size_t j=0; j<NUM_BANKS; j++)
@@ -1233,79 +1039,48 @@ void MemoryController::resetStats()
             
             if (closePageHits >= openPageHits)
             {
-                /*
-                if (pagePolicyTwoBitCounter > 0)
+                // determine if the previous phase page policy is the same as predicted one
+                if (rowBufferPolicy == ClosePage)
                 {
-                    pagePolicyTwoBitCounter--;
+                    pagePolicyCorrectPredictionCounter++;
                 }
-                else
-                {
-                    pagePolicyTwoBitCounter = 0;
-                }
+                //count the number of close page switching
+                unifiedNumberOfClosePageSwitching++;
                 
-                if (pagePolicyTwoBitCounter < 2)
-                {
-                    // the conditional statement counts the number of close page switching if the last page policy was open page
-                    if (rowBufferPolicy == OpenPage)
-                    {
-                        unifiedNumberOfClosePageSwitching++;
-                    }
-                    rowBufferPolicy = ClosePage;
-                    PRINT("Row Buffer Policy is Close Page");
-                }
-                else
-                {
-                    PRINT("Row Buffer Policy is Open Page");
-                    rowBufferPolicy = OpenPage;
-                }
-                */
-                // the conditional statement counts the number of close page switching if the last page policy was open page
-                if (rowBufferPolicy == OpenPage)
-                {
-                    unifiedNumberOfClosePageSwitching++;
-                }
                 rowBufferPolicy = ClosePage;
                 PRINT("Row Buffer Policy is Close Page");
 
             }
             else
             {
-                /*
-                if (pagePolicyTwoBitCounter < 3)
+                // determine if the previous phase page policy is the same as predicted one
+                if (rowBufferPolicy == OpenPage)
                 {
-                    pagePolicyTwoBitCounter++;
-                }
-                else
-                {
-                    pagePolicyTwoBitCounter = 3;
+                    pagePolicyCorrectPredictionCounter++;
                 }
                 
-                if (pagePolicyTwoBitCounter > 1)
-                {
-                    // the conditional statement counts the number of open page switching if the last page policy was close page
-                    if (rowBufferPolicy == ClosePage)
-                    {
-                        unifiedNumberOfOpenPageSwitching++;
-                    }
-                    rowBufferPolicy = OpenPage;
-                    PRINT("Row Buffer Policy is Open Page");
-                }
-                else
-                {
-                    rowBufferPolicy = ClosePage;
-                    PRINT("Row Buffer Policy is Close Page");
-
-                }
-                */
-                // the conditional statement counts the number of open page switching if the last page policy was close page
-                if (rowBufferPolicy == ClosePage)
-                {
-                    unifiedNumberOfOpenPageSwitching++;
-                }
+                // count the number of open page switching
+                unifiedNumberOfOpenPageSwitching++;
+                
                 rowBufferPolicy = OpenPage;
                 PRINT("Row Buffer Policy is Open Page");
-
+                
             }
+            
+            double fractionOfClosePage = (double) unifiedNumberOfClosePageSwitching / unifiedTotalNumberOfPageSwitching;
+            double fractionOfOpenPage = (double) unifiedNumberOfOpenPageSwitching / unifiedTotalNumberOfPageSwitching;
+            pagePolicyPredictionAccuracy = (double) pagePolicyCorrectPredictionCounter / unifiedTotalNumberOfPageSwitching;
+            PRINT(" ");
+            PRINT("Number of close page switching = " << unifiedNumberOfClosePageSwitching);
+            PRINT("Number of open page switching = " << unifiedNumberOfOpenPageSwitching);
+            PRINT("Total number of page switching = " << unifiedTotalNumberOfPageSwitching);
+            
+            PRINT(" ");
+            PRINT("Fraction of close page = " << fractionOfClosePage);
+            PRINT("Fraction of open page = " << fractionOfOpenPage);
+            PRINT(" ");
+            
+            PRINT("Page policy prediction accuracy = " << pagePolicyPredictionAccuracy);
         }
     }
 
