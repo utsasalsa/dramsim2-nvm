@@ -117,8 +117,9 @@ private:
     vector< vector<bool> > rowActiveProblemForClosePagePolicy;
     vector< vector<bool> > readWriteRowActiveProblemForClosePagePolicy;
     //
-    
+    vector< vector<unsigned> > distributedSaturatingCounter;
     BusPacket *previousPacket;
+    unsigned unifiedSaturatingCounter;
 };
 }
 

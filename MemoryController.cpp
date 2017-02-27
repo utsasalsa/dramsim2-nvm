@@ -938,149 +938,157 @@ void MemoryController::resetStats()
         //double threshold = 0.01;
         //PRINT("Total open page transactions = " << totalOpenPageTransactions);
         //PRINT("Total close page transactions = " << totalClosePageTransactions);
-        if (DISTRIBUTED_PAGE_POLICY_FLAG)
+        if (DISTRIBUTED_PAGE_POLICY_FLAG == true)
         {
-            PRINT("Threshold = " << threshold);
-            for (size_t i=0; i<NUM_RANKS; i++)
-            {                
-                for (size_t j=0; j<NUM_BANKS; j++)
+            if (ENABLE_HYBRID_SATURATING_COUNTER == false)
+            {
+                PRINT("hello");
+                PRINT("Threshold = " << threshold);
+                for (size_t i=0; i<NUM_RANKS; i++)
                 {
-                    //PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
-                    //PRINT("commandQueue.bankAccessCounters = " << (double)commandQueue.bankAccessCounters[i][j]);
-                    /*
-                    PRINT("Current bank states "<<bankStates[i][j].currentBankState);
-                    PRINT("last command = " << bankStates[i][j].lastCommand);
-                    PRINT("packet row address: " << poppedBusPacket->row);
-                    PRINT("bank open row address: " << bankStates[i][j].openRowAddress);
-                    PRINT("current command = " << packetType);
-                    */
-                    double hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
-                    
-                    
-                    if (commandQueue.bankAccessCounters[i][j] >0)
+                    for (size_t j=0; j<NUM_BANKS; j++)
                     {
-                        //PRINT("hit rate = " << hitRate);
-                    }
-                    else
-                    {
-                        //PRINT("hit rate = " << 0);
-                        //continue;
-                    }
-                    PRINT(" ");
-                    
-                    if (hitRate >= threshold)
-                    {
-                        // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
-                        if (commandQueue.bankRowBufferPolicy[i][j] == ClosePage)
-                        {
-                            distributedNumberOfOpenPageSwitching[i][j]++;
-                        }
+                        //PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
+                        //PRINT("commandQueue.bankAccessCounters = " << (double)commandQueue.bankAccessCounters[i][j]);
+                        /*
+                         PRINT("Current bank states "<<bankStates[i][j].currentBankState);
+                         PRINT("last command = " << bankStates[i][j].lastCommand);
+                         PRINT("packet row address: " << poppedBusPacket->row);
+                         PRINT("bank open row address: " << bankStates[i][j].openRowAddress);
+                         PRINT("current command = " << packetType);
+                         */
+                        double hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
                         
-                        commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
-                        PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
-
-                    }
-                    else
-                    {
-                        // the conditional statement counts the number of close page switching of a command queue if the last page policy was open page
-                        if (commandQueue.bankRowBufferPolicy[i][j] == OpenPage)
+                        
+                        if (commandQueue.bankAccessCounters[i][j] >0)
                         {
-                            distributedNumberOfClosePageSwitching[i][j]++;
+                            //PRINT("hit rate = " << hitRate);
                         }
-                        commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
-                        commandQueue.switchedToClosePage[i][j] = true;
-                        PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
-
+                        else
+                        {
+                            //PRINT("hit rate = " << 0);
+                            //continue;
+                        }
+                        PRINT(" ");
+                        
+                        if (hitRate >= threshold)
+                        {
+                            // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
+                            if (commandQueue.bankRowBufferPolicy[i][j] == ClosePage)
+                            {
+                                distributedNumberOfOpenPageSwitching[i][j]++;
+                            }
+                            
+                            commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
+                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
+                            
+                        }
+                        else
+                        {
+                            // the conditional statement counts the number of close page switching of a command queue if the last page policy was open page
+                            if (commandQueue.bankRowBufferPolicy[i][j] == OpenPage)
+                            {
+                                distributedNumberOfClosePageSwitching[i][j]++;
+                            }
+                            commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
+                            commandQueue.switchedToClosePage[i][j] = true;
+                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
+                            
+                        }
                     }
                 }
             }
+
         }
         else
         {
-            // As we have unified page policy for all command queues, therefore, we count
-            // how many command queues favor open page and how many command queues favor close page.
-            // After that, we compare the two numbers and decide which page policy should be chosen.
-            int openPageHits = 0;
-            int closePageHits = 0;
-            //PRINT("Threshold = " << threshold);
-            unifiedTotalNumberOfPageSwitching++;
-            for (size_t i=0; i<NUM_RANKS; i++)
+            if (ENABLE_HYBRID_SATURATING_COUNTER == false)
             {
-                for (size_t j=0; j<NUM_BANKS; j++)
+                // As we have unified page policy for all command queues, therefore, we count
+                // how many command queues favor open page and how many command queues favor close page.
+                // After that, we compare the two numbers and decide which page policy should be chosen.
+                int openPageHits = 0;
+                int closePageHits = 0;
+                //PRINT("Threshold = " << threshold);
+                unifiedTotalNumberOfPageSwitching++;
+                for (size_t i=0; i<NUM_RANKS; i++)
                 {
-                    double hitRate;
-                    if (commandQueue.bankAccessCounters[i][j] == 0)
+                    for (size_t j=0; j<NUM_BANKS; j++)
                     {
-                        //closePageHits++;
-                        hitRate = 0;
-                        //continue;
+                        double hitRate;
+                        if (commandQueue.bankAccessCounters[i][j] == 0)
+                        {
+                            //closePageHits++;
+                            hitRate = 0;
+                            //continue;
+                        }
+                        else
+                        {
+                            hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
+                            
+                        }
+                        
+                        //PRINT("commandQueue.bankHitCounters = " << commandQueue.bankHitCounters[i][j]);
+                        //PRINT("commandQueue.bankAccessCounters = " << commandQueue.bankAccessCounters[i][j]);
+                        /*
+                         PRINT("hit rate: " << hitRate);
+                         */
+                        if (hitRate >= threshold)
+                        {
+                            openPageHits++;
+                        }
+                        else
+                        {
+                            closePageHits++;
+                        }
                     }
-                    else
+                }
+                
+                if (closePageHits >= openPageHits)
+                {
+                    // determine if the previous phase page policy is the same as predicted one
+                    if (rowBufferPolicy == ClosePage)
                     {
-                        hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
-
+                        pagePolicyCorrectPredictionCounter++;
+                    }
+                    //count the number of close page switching
+                    unifiedNumberOfClosePageSwitching++;
+                    
+                    rowBufferPolicy = ClosePage;
+                    PRINT("Row Buffer Policy is Close Page");
+                    
+                }
+                else
+                {
+                    // determine if the previous phase page policy is the same as predicted one
+                    if (rowBufferPolicy == OpenPage)
+                    {
+                        pagePolicyCorrectPredictionCounter++;
                     }
                     
-                    //PRINT("commandQueue.bankHitCounters = " << commandQueue.bankHitCounters[i][j]);
-                    //PRINT("commandQueue.bankAccessCounters = " << commandQueue.bankAccessCounters[i][j]);
-                    /*
-                    PRINT("hit rate: " << hitRate);
-                    */
-                    if (hitRate >= threshold)
-                    {
-                        openPageHits++;
-                    }
-                    else
-                    {
-                        closePageHits++;
-                    }
-                }
-            }
-            
-            if (closePageHits >= openPageHits)
-            {
-                // determine if the previous phase page policy is the same as predicted one
-                if (rowBufferPolicy == ClosePage)
-                {
-                    pagePolicyCorrectPredictionCounter++;
-                }
-                //count the number of close page switching
-                unifiedNumberOfClosePageSwitching++;
-                
-                rowBufferPolicy = ClosePage;
-                PRINT("Row Buffer Policy is Close Page");
-
-            }
-            else
-            {
-                // determine if the previous phase page policy is the same as predicted one
-                if (rowBufferPolicy == OpenPage)
-                {
-                    pagePolicyCorrectPredictionCounter++;
+                    // count the number of open page switching
+                    unifiedNumberOfOpenPageSwitching++;
+                    
+                    rowBufferPolicy = OpenPage;
+                    PRINT("Row Buffer Policy is Open Page");
+                    
                 }
                 
-                // count the number of open page switching
-                unifiedNumberOfOpenPageSwitching++;
+                double fractionOfClosePage = (double) unifiedNumberOfClosePageSwitching / unifiedTotalNumberOfPageSwitching;
+                double fractionOfOpenPage = (double) unifiedNumberOfOpenPageSwitching / unifiedTotalNumberOfPageSwitching;
+                pagePolicyPredictionAccuracy = (double) pagePolicyCorrectPredictionCounter / unifiedTotalNumberOfPageSwitching;
+                PRINT(" ");
+                PRINT("Number of close page switching = " << unifiedNumberOfClosePageSwitching);
+                PRINT("Number of open page switching = " << unifiedNumberOfOpenPageSwitching);
+                PRINT("Total number of page switching = " << unifiedTotalNumberOfPageSwitching);
                 
-                rowBufferPolicy = OpenPage;
-                PRINT("Row Buffer Policy is Open Page");
+                PRINT(" ");
+                PRINT("Fraction of close page = " << fractionOfClosePage);
+                PRINT("Fraction of open page = " << fractionOfOpenPage);
+                PRINT(" ");
                 
+                PRINT("Page policy prediction accuracy = " << pagePolicyPredictionAccuracy);
             }
-            
-            double fractionOfClosePage = (double) unifiedNumberOfClosePageSwitching / unifiedTotalNumberOfPageSwitching;
-            double fractionOfOpenPage = (double) unifiedNumberOfOpenPageSwitching / unifiedTotalNumberOfPageSwitching;
-            pagePolicyPredictionAccuracy = (double) pagePolicyCorrectPredictionCounter / unifiedTotalNumberOfPageSwitching;
-            PRINT(" ");
-            PRINT("Number of close page switching = " << unifiedNumberOfClosePageSwitching);
-            PRINT("Number of open page switching = " << unifiedNumberOfOpenPageSwitching);
-            PRINT("Total number of page switching = " << unifiedTotalNumberOfPageSwitching);
-            
-            PRINT(" ");
-            PRINT("Fraction of close page = " << fractionOfClosePage);
-            PRINT("Fraction of open page = " << fractionOfOpenPage);
-            PRINT(" ");
-            
-            PRINT("Page policy prediction accuracy = " << pagePolicyPredictionAccuracy);
         }
     }
 

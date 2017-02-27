@@ -125,6 +125,9 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
     
     switchedToClosePage = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
     openPageRestoreDone = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
+    unifiedSaturatingCounter = 0;
+    distributedSaturatingCounter = vector< vector<unsigned> >(NUM_RANKS, vector<unsigned>(NUM_BANKS,3));
+
 
 }
 CommandQueue::~CommandQueue()
@@ -1532,12 +1535,93 @@ void CommandQueue::hit(BusPacket *busPacket)
                 
                 bankHitCounters[busPacket->rank][busPacket->bank]++;
                 //bankAccessCounters[busPacket->rank][busPacket->bank]++;
+                if (ENABLE_HYBRID_SATURATING_COUNTER == true)
+                {
+                    if (DISTRIBUTED_PAGE_POLICY_FLAG == false)
+                    {
+                        if (unifiedSaturatingCounter < 3)
+                        {
+                            unifiedSaturatingCounter++;
+                        }
+                        else
+                        {
+                            unifiedSaturatingCounter = 3;
+                        }
+                    }
+                }
+                else
+                {
+                    if (distributedSaturatingCounter[busPacket->rank][busPacket->bank] < 3)
+                    {
+                        distributedSaturatingCounter[busPacket->rank][busPacket->bank]++;
+                    }
+                    else
+                    {
+                        distributedSaturatingCounter[busPacket->rank][busPacket->bank] = 3;
+                    }
+                }
+            }
+            else
+            {
+                if (ENABLE_HYBRID_SATURATING_COUNTER == true)
+                {
+                    if (DISTRIBUTED_PAGE_POLICY_FLAG == false)
+                    {
+                        if (unifiedSaturatingCounter >0)
+                        {
+                            unifiedSaturatingCounter--;
+                        }
+                        else
+                        {
+                            unifiedSaturatingCounter = 0;
+                        }
+                    }
+                    else
+                    {
+                        if (distributedSaturatingCounter[busPacket->rank][busPacket->bank] > 0)
+                        {
+                            distributedSaturatingCounter[busPacket->rank][busPacket->bank]--;
+                        }
+                        else
+                        {
+                            distributedSaturatingCounter[busPacket->rank][busPacket->bank] = 0;
+                        }
+                    }
+                }
             }
             previousPacketsArray[busPacket->rank][busPacket->bank] = busPacket;
         }
         else
         {
             previousPacketsArray[busPacket->rank][busPacket->bank] = busPacket;
+        }
+    }
+    if (ENABLE_HYBRID_SATURATING_COUNTER == true)
+    {
+        if (DISTRIBUTED_PAGE_POLICY_FLAG == false)
+        {
+            
+            if (unifiedSaturatingCounter > 1)
+            {
+                rowBufferPolicy = OpenPage;
+            }
+            else
+            {
+                rowBufferPolicy = ClosePage;
+            }
+        }
+        else
+        {
+            if (distributedSaturatingCounter[busPacket->rank][busPacket->bank] > 1)
+            {
+                bankRowBufferPolicy[busPacket->rank][busPacket->bank] = OpenPage;
+                //PRINT("Row Buffer Policy of bank[" << busPacket->rank << "][" << busPacket->bank << "] is Open Page"   );
+            }
+            else
+            {
+                bankRowBufferPolicy[busPacket->rank][busPacket->bank] = ClosePage;
+                //PRINT("Row Buffer Policy of bank[" << busPacket->rank << "][" << busPacket->bank << "] is Close Page"   );
+            }
         }
     }
 
