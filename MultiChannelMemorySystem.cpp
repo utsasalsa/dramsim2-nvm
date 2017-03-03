@@ -305,13 +305,20 @@ void MultiChannelMemorySystem::InitOutputFiles(vector<string> traceFileNameArray
             string pagePolicyDistribution = "";
             if (HYBRID_PAGE_POLICY_FLAG)
             {
-                if (DISTRIBUTED_PAGE_POLICY_FLAG)
+                if (ENABLE_HYBRID_SATURATING_COUNTER)
                 {
-                    pagePolicyDistribution = "distributed";
+                    pagePolicyDistribution = "two_bit_counter";
                 }
                 else
                 {
-                    pagePolicyDistribution = "unified";
+                    if (DISTRIBUTED_PAGE_POLICY_FLAG)
+                    {
+                        pagePolicyDistribution = "distributed";
+                    }
+                    else
+                    {
+                        pagePolicyDistribution = "unified";
+                    }
                 }
             }
             

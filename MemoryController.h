@@ -128,10 +128,15 @@ private:
     bool prechargeFlag;
     
     //Hybrid page policy statistical variables
+    unsigned totalNumberOfPhases;
+    unsigned totalNumberOfPageSwitching;
     unsigned unifiedNumberOfOpenPageSwitching;
     unsigned unifiedNumberOfClosePageSwitching;
-    unsigned unifiedTotalNumberOfPageSwitching;
+    unsigned numberOfPhasesInOpenPage;
+    unsigned numberOfPhasesInClosePage;
     unsigned pagePolicyTwoBitCounter;
+    double unifiedFractionOfOpenPage;
+    double unifiedFractionOfClosePage;
     
     //RowBufferPolicy previousPagePolicy;
     unsigned pagePolicyCorrectPredictionCounter;
