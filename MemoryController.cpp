@@ -71,7 +71,15 @@ refreshRank(0),
 prechargeFlag(false),
 unifiedNumberOfOpenPageSwitching(0),
 unifiedNumberOfClosePageSwitching(0),
-unifiedTotalNumberOfPageSwitching(0),
+unifiedFractionOfClosePage(0),
+unifiedFractionOfOpenPage(0),
+totalNumberOfPhases(0),
+distributedAverageNumberOfClosePageSwitching(0),
+distributedAverageNumberOfOpenPageSwitching(0),
+distributedAverageFractionOfOpenPage(0),
+distributedAverageFractionOfClosePage(0),
+numberOfPhasesInOpenPage(0),
+numberOfPhasesInClosePage(0),
 pagePolicyCorrectPredictionCounter(0),
 pagePolicyPredictionAccuracy(0),
 totalClosePageTransactions(0),
@@ -132,7 +140,14 @@ totalOpenPageTransactions(0)
     
     distributedNumberOfOpenPageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
     distributedNumberOfClosePageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
+    distributedTotalNumberOfPageSwitching = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
     
+    distributedNumberOfPhasesInOpenPage = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
+    distributedNumberOfPhasesInClosePage = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
+    distributedTotalNumberOfPhases = vector< vector<unsigned> > (NUM_RANKS, vector<unsigned> (NUM_BANKS, 0));
+    distributedFractionOfOpenPage = vector< vector<double> > (NUM_RANKS, vector<double> (NUM_BANKS, 0));
+    distributedFractionOfClosePage = vector< vector<double> > (NUM_RANKS, vector<double> (NUM_BANKS, 0));
+
     lastTransactionAddressArray = vector< vector<uint64_t> > (NUM_RANKS, vector<uint64_t> (NUM_BANKS, 0));
     writeRestoreDoneForOpenPage = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
     firstRankBankTransaction = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, true));
@@ -942,8 +957,12 @@ void MemoryController::resetStats()
         {
             if (ENABLE_HYBRID_SATURATING_COUNTER == false)
             {
-                PRINT("hello");
+                totalNumberOfPhases++;
+                unsigned numberOfPhasesInOpenPageForAllBanks = 0;
+                unsigned numberOfPhasesInClosePageForAllBanks = 0;
+
                 PRINT("Threshold = " << threshold);
+                
                 for (size_t i=0; i<NUM_RANKS; i++)
                 {
                     for (size_t j=0; j<NUM_BANKS; j++)
@@ -960,17 +979,6 @@ void MemoryController::resetStats()
                         double hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
                         
                         
-                        if (commandQueue.bankAccessCounters[i][j] >0)
-                        {
-                            //PRINT("hit rate = " << hitRate);
-                        }
-                        else
-                        {
-                            //PRINT("hit rate = " << 0);
-                            //continue;
-                        }
-                        PRINT(" ");
-                        
                         if (hitRate >= threshold)
                         {
                             // the conditional statement counts the number of open page switching of a command queue if the last page policy was close page
@@ -978,6 +986,8 @@ void MemoryController::resetStats()
                             {
                                 distributedNumberOfOpenPageSwitching[i][j]++;
                             }
+                            distributedNumberOfPhasesInOpenPage[i][j]++;
+
                             
                             commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
                             PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
@@ -990,15 +1000,52 @@ void MemoryController::resetStats()
                             {
                                 distributedNumberOfClosePageSwitching[i][j]++;
                             }
+                            distributedNumberOfPhasesInClosePage[i][j]++;
+
                             commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
                             commandQueue.switchedToClosePage[i][j] = true;
                             PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
                             
                         }
+                        
+                        totalNumberOfPhases;
+                        
+                        //PRINT("Number of phases in close page [" << i << "][" << j << "] is Close Page = " <<   distributedNumberOfPhasesInClosePage[i][j]);
+                        
+                        distributedFractionOfClosePage[i][j] = (double) distributedNumberOfPhasesInClosePage[i][j]/ (double)
+                        totalNumberOfPhases;
+                        
+                        /*
+                         PRINT("Number of Open Page Switching bank["<< i << "][" << j << "] = " <<distributedNumberOfPhasesInOpenPage[i][j])
+                         PRINT("Number of Close Page Switching bank["<< i << "][" << j << "] = " <<distributedNumberOfPhasesInClosePage[i][j]);
+                         PRINT(" ");
+                         PRINT("Fraction of Open Page bank["<< i << "][" << j << "] = " << distributedFractionOfOpenPage[i][j]);
+                         PRINT("Fraction of Close Page bank["<< i << "][" << j << "] = " << distributedFractionOfClosePage[i][j]);
+                         */
+                        
+                        numberOfPhasesInOpenPageForAllBanks += distributedNumberOfPhasesInOpenPage[i][j];
+                        numberOfPhasesInClosePageForAllBanks += distributedNumberOfPhasesInClosePage[i][j];
+
                     }
                 }
-            }
+                distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
+                distributedAverageNumberOfClosePageSwitching = numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
+                
+                distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+                distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+                
+                
+                PRINT(" ");
+                PRINT("Fraction of close page = " << distributedAverageFractionOfClosePage);
+                PRINT("Fraction of open page = " << distributedAverageFractionOfOpenPage);
+                PRINT("Total number of phases = " << totalNumberOfPhases);
+                PRINT(" ");
+                PRINT("Frequency of close page = " << distributedAverageNumberOfClosePageSwitching);
+                PRINT("Frequency of open page = " << distributedAverageNumberOfOpenPageSwitching);
+                PRINT(" ");
 
+            }
+            
         }
         else
         {
@@ -1010,7 +1057,8 @@ void MemoryController::resetStats()
                 int openPageHits = 0;
                 int closePageHits = 0;
                 //PRINT("Threshold = " << threshold);
-                unifiedTotalNumberOfPageSwitching++;
+                totalNumberOfPhases++;
+                
                 for (size_t i=0; i<NUM_RANKS; i++)
                 {
                     for (size_t j=0; j<NUM_BANKS; j++)
@@ -1051,8 +1099,14 @@ void MemoryController::resetStats()
                     {
                         pagePolicyCorrectPredictionCounter++;
                     }
+                    else
+                    {
+                        totalNumberOfPageSwitching++;
+                        // count the number of switchings to close page
+                        unifiedNumberOfClosePageSwitching++;
+                    }
                     //count the number of close page switching
-                    unifiedNumberOfClosePageSwitching++;
+                    numberOfPhasesInClosePage++;
                     
                     rowBufferPolicy = ClosePage;
                     PRINT("Row Buffer Policy is Close Page");
@@ -1065,29 +1119,32 @@ void MemoryController::resetStats()
                     {
                         pagePolicyCorrectPredictionCounter++;
                     }
+                    else
+                    {
+                        totalNumberOfPageSwitching++;
+                        // count the number of switchings to close page
+                        unifiedNumberOfOpenPageSwitching++;
+                    }
                     
                     // count the number of open page switching
-                    unifiedNumberOfOpenPageSwitching++;
+                    numberOfPhasesInOpenPage++;
                     
                     rowBufferPolicy = OpenPage;
                     PRINT("Row Buffer Policy is Open Page");
                     
                 }
                 
-                double fractionOfClosePage = (double) unifiedNumberOfClosePageSwitching / unifiedTotalNumberOfPageSwitching;
-                double fractionOfOpenPage = (double) unifiedNumberOfOpenPageSwitching / unifiedTotalNumberOfPageSwitching;
-                pagePolicyPredictionAccuracy = (double) pagePolicyCorrectPredictionCounter / unifiedTotalNumberOfPageSwitching;
-                PRINT(" ");
-                PRINT("Number of close page switching = " << unifiedNumberOfClosePageSwitching);
-                PRINT("Number of open page switching = " << unifiedNumberOfOpenPageSwitching);
-                PRINT("Total number of page switching = " << unifiedTotalNumberOfPageSwitching);
+                unifiedFractionOfClosePage = (double) numberOfPhasesInClosePage / totalNumberOfPhases;
+                unifiedFractionOfOpenPage = (double) numberOfPhasesInOpenPage / totalNumberOfPhases;
                 
+                //pagePolicyPredictionAccuracy = (double) pagePolicyCorrectPredictionCounter / unifiedTotalNumberOfPageSwitching;
                 PRINT(" ");
-                PRINT("Fraction of close page = " << fractionOfClosePage);
-                PRINT("Fraction of open page = " << fractionOfOpenPage);
+                PRINT("Fraction of close page = " << unifiedFractionOfClosePage);
+                PRINT("Fraction of open page = " << unifiedFractionOfOpenPage);
+                PRINT("Total number of phases = " << totalNumberOfPhases);
                 PRINT(" ");
-                
-                PRINT("Page policy prediction accuracy = " << pagePolicyPredictionAccuracy);
+                PRINT("Frequency of close page = " << numberOfPhasesInClosePage);
+                PRINT("Frequency of open page = " << numberOfPhasesInOpenPage);
             }
         }
     }
@@ -1262,17 +1319,24 @@ void MemoryController::printStats(bool finalStats)
             {
                 if (DISTRIBUTED_PAGE_POLICY_FLAG == true)
                 {
-                    /*
-                    // they are vectors
-                    csvOut.getOutputStream() << " Number of Open Page switching= " << distributedNumberOfOpenPageSwitching <<endl;
-                    csvOut.getOutputStream() << " Number of Close Page switching=" << distributedNumberOfClosePageSwitching <<endl;
                     csvOut.getOutputStream() << endl;
-                     */
+                    csvOut.getOutputStream() << " Fraction of Open Page switching = " << distributedAverageFractionOfOpenPage <<endl;
+                    csvOut.getOutputStream() << " Fraction of Close Page switching = " << distributedAverageFractionOfClosePage <<endl;
+                    csvOut.getOutputStream() << endl;
+                    
+                    csvOut.getOutputStream() << " Frequency of Open Page switching = " << distributedAverageNumberOfOpenPageSwitching <<endl;
+                    csvOut.getOutputStream() << " Frequency of Close Page switching = " << distributedAverageNumberOfClosePageSwitching <<endl;
+                    csvOut.getOutputStream() << endl;
                 }
                 else
                 {
-                    csvOut.getOutputStream() << " Number of Open Page switching= " << unifiedNumberOfOpenPageSwitching <<endl;
-                    csvOut.getOutputStream() << " Number of Close Page switching=" << unifiedNumberOfClosePageSwitching <<endl;
+                    csvOut.getOutputStream() << endl;
+                    csvOut.getOutputStream() << " Frequency of Open Page switching = " << numberOfPhasesInOpenPage <<endl;
+                    csvOut.getOutputStream() << " Frequency of Close Page switching = " << numberOfPhasesInClosePage <<endl;
+                    
+                    csvOut.getOutputStream() << endl;
+                    csvOut.getOutputStream() << "Fraction of Open Page = " << unifiedFractionOfOpenPage << endl;
+                    csvOut.getOutputStream() << "Fraction of Close Page = " << unifiedFractionOfClosePage << endl;
                     csvOut.getOutputStream() << endl;
                 }
             }

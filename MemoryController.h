@@ -142,9 +142,19 @@ private:
     unsigned pagePolicyCorrectPredictionCounter;
     double pagePolicyPredictionAccuracy;
     
-    
+    double distributedAverageNumberOfOpenPageSwitching;
+    double distributedAverageNumberOfClosePageSwitching;
+    double distributedAverageFractionOfOpenPage;
+    double distributedAverageFractionOfClosePage;
     vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
     vector< vector<unsigned> > distributedNumberOfClosePageSwitching;
+    vector< vector<unsigned> > distributedNumberOfPhasesInOpenPage;
+    vector< vector<unsigned> > distributedNumberOfPhasesInClosePage;
+    vector< vector<unsigned> > distributedTotalNumberOfPageSwitching;
+    vector< vector<unsigned> > distributedTotalNumberOfPhases;
+    vector< vector<double> > distributedFractionOfClosePage;
+    vector< vector<double> > distributedFractionOfOpenPage;
+
     vector< vector<uint64_t> > lastTransactionAddressArray;
     vector< vector<bool> > writeRestoreDoneForOpenPage;
     vector< vector<bool> > firstRankBankTransaction;
