@@ -347,6 +347,50 @@ void MemoryController::update()
         (*ranks)[refreshRank]->refreshWaiting = true;
     }
     
+    if (ENABLE_HYBRID_SATURATING_COUNTER)
+    {
+        totalNumberOfPhases++;
+        unsigned numberOfPhasesInOpenPageForAllBanks = 0;
+        unsigned numberOfPhasesInClosePageForAllBanks = 0;
+
+        for (size_t i=0; i<NUM_RANKS; i++)
+        {
+            for (size_t j=0; j<NUM_BANKS; j++)
+            {
+                if (commandQueue.bankRowBufferPolicy[i][j] == OpenPage)
+                {
+                    distributedNumberOfPhasesInOpenPage[i][j]++;
+                    
+                }
+                else
+                {
+                    distributedNumberOfPhasesInClosePage[i][j]++;
+                    
+                }
+                
+                numberOfPhasesInOpenPageForAllBanks += distributedNumberOfPhasesInOpenPage[i][j];
+                numberOfPhasesInClosePageForAllBanks += distributedNumberOfPhasesInClosePage[i][j];
+
+            }
+        }
+        
+        distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
+        distributedAverageNumberOfClosePageSwitching = numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
+        
+        distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+        distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+        
+        /*
+        PRINT(" ");
+        PRINT("Fraction of close page = " << distributedAverageFractionOfClosePage);
+        PRINT("Fraction of open page = " << distributedAverageFractionOfOpenPage);
+        PRINT("Total number of phases = " << totalNumberOfPhases);
+        PRINT(" ");
+        PRINT("Frequency of close page = " << distributedAverageNumberOfClosePageSwitching);
+        PRINT("Frequency of open page = " << distributedAverageNumberOfOpenPageSwitching);
+        PRINT(" ");
+        */
+    }
     //pass a pointer to a poppedBusPacket
     
     //function returns true if there is something valid in poppedBusPacket
@@ -1007,8 +1051,6 @@ void MemoryController::resetStats()
                             PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
                             
                         }
-                        
-                        totalNumberOfPhases;
                         
                         //PRINT("Number of phases in close page [" << i << "][" << j << "] is Close Page = " <<   distributedNumberOfPhasesInClosePage[i][j]);
                         
