@@ -375,7 +375,7 @@ void MemoryController::update()
         }
         
         distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
-        distributedAverageNumberOfClosePageSwitching = numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
+        distributedAverageNumberOfClosePageSwitching = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
         
         distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
         distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
@@ -1071,7 +1071,7 @@ void MemoryController::resetStats()
                     }
                 }
                 distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
-                distributedAverageNumberOfClosePageSwitching = numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
+                distributedAverageNumberOfClosePageSwitching = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
                 
                 distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
                 distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
@@ -1368,6 +1368,7 @@ void MemoryController::printStats(bool finalStats)
                     
                     csvOut.getOutputStream() << " Frequency of Open Page switching = " << distributedAverageNumberOfOpenPageSwitching <<endl;
                     csvOut.getOutputStream() << " Frequency of Close Page switching = " << distributedAverageNumberOfClosePageSwitching <<endl;
+                    
                     csvOut.getOutputStream() << endl;
                 }
                 else
@@ -1377,8 +1378,8 @@ void MemoryController::printStats(bool finalStats)
                     csvOut.getOutputStream() << " Frequency of Close Page switching = " << numberOfPhasesInClosePage <<endl;
                     
                     csvOut.getOutputStream() << endl;
-                    csvOut.getOutputStream() << "Fraction of Open Page = " << unifiedFractionOfOpenPage << endl;
-                    csvOut.getOutputStream() << "Fraction of Close Page = " << unifiedFractionOfClosePage << endl;
+                    csvOut.getOutputStream() << " Fraction of Open Page switching = " << unifiedFractionOfOpenPage << endl;
+                    csvOut.getOutputStream() << " Fraction of Close Page switching = " << unifiedFractionOfClosePage << endl;
                     csvOut.getOutputStream() << endl;
                 }
             }
