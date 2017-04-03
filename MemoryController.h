@@ -142,10 +142,13 @@ private:
     unsigned pagePolicyCorrectPredictionCounter;
     double pagePolicyPredictionAccuracy;
     
+    unsigned numberOfPhasesInOpenPageForAllBanks;
+    unsigned numberOfPhasesInClosePageForAllBanks;
     double distributedAverageNumberOfOpenPageSwitching;
     double distributedAverageNumberOfClosePageSwitching;
     double distributedAverageFractionOfOpenPage;
     double distributedAverageFractionOfClosePage;
+    
     vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
     vector< vector<unsigned> > distributedNumberOfClosePageSwitching;
     vector< vector<unsigned> > distributedNumberOfPhasesInOpenPage;

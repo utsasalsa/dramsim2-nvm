@@ -83,7 +83,9 @@ numberOfPhasesInClosePage(0),
 pagePolicyCorrectPredictionCounter(0),
 pagePolicyPredictionAccuracy(0),
 totalClosePageTransactions(0),
-totalOpenPageTransactions(0)
+totalOpenPageTransactions(0),
+numberOfPhasesInClosePageForAllBanks(0),
+numberOfPhasesInOpenPageForAllBanks(0)
 {
     //get handle on parent
     parentMemorySystem = parent;
@@ -350,8 +352,8 @@ void MemoryController::update()
     if (ENABLE_HYBRID_SATURATING_COUNTER)
     {
         totalNumberOfPhases++;
-        unsigned numberOfPhasesInOpenPageForAllBanks = 0;
-        unsigned numberOfPhasesInClosePageForAllBanks = 0;
+        //unsigned numberOfPhasesInOpenPageForAllBanks = 0;
+        //unsigned numberOfPhasesInClosePageForAllBanks = 0;
 
         for (size_t i=0; i<NUM_RANKS; i++)
         {
@@ -360,25 +362,45 @@ void MemoryController::update()
                 if (commandQueue.bankRowBufferPolicy[i][j] == OpenPage)
                 {
                     distributedNumberOfPhasesInOpenPage[i][j]++;
-                    
+                    numberOfPhasesInOpenPageForAllBanks++;
                 }
                 else
                 {
                     distributedNumberOfPhasesInClosePage[i][j]++;
-                    
+                    numberOfPhasesInClosePageForAllBanks++;
                 }
                 
-                numberOfPhasesInOpenPageForAllBanks += distributedNumberOfPhasesInOpenPage[i][j];
-                numberOfPhasesInClosePageForAllBanks += distributedNumberOfPhasesInClosePage[i][j];
+
+                //numberOfPhasesInOpenPageForAllBanks += distributedNumberOfPhasesInOpenPage[i][j];
+                
+                //numberOfPhasesInClosePageForAllBanks += distributedNumberOfPhasesInClosePage[i][j];
+                
 
             }
         }
+        /*
+         distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
+         distributedAverageNumberOfClosePageSwitching = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
+         double totalPhaseSwitching = distributedAverageNumberOfOpenPageSwitching + distributedAverageNumberOfClosePageSwitching;
+         //distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+         distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalPhaseSwitching);
+         
+         //distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+         distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalPhaseSwitching);
+         
+         */
         
         distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
         distributedAverageNumberOfClosePageSwitching = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
+        double totalPhaseSwitching = distributedAverageNumberOfOpenPageSwitching + distributedAverageNumberOfClosePageSwitching;
+
         
-        distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
-        distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+        //distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+        distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalPhaseSwitching);
+
+        //distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+        distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalPhaseSwitching);
+
         
         /*
         PRINT(" ");
@@ -390,6 +412,7 @@ void MemoryController::update()
         PRINT("Frequency of open page = " << distributedAverageNumberOfOpenPageSwitching);
         PRINT(" ");
         */
+        
     }
     //pass a pointer to a poppedBusPacket
     
@@ -488,10 +511,29 @@ void MemoryController::update()
             case WRITE:
                     if (poppedBusPacket->busPacketType == WRITE_P)
                     {
+                        /*
                         bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
                                                                   bankStates[rank][bank].nextActivate);
                         bankStates[rank][bank].lastCommand = WRITE_P;
                         bankStates[rank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
+                        */
+                        if (poppedBusPacket->restoreWrite == true)
+                        {
+                            
+                            bankStates[rank][bank].nextActivate = max(currentClockCycle + RESTORE_LINE,
+                                                                      bankStates[rank][bank].nextActivate);
+                            bankStates[rank][bank].lastCommand = WRITE_P;
+                            bankStates[rank][bank].stateChangeCountdown = RESTORE_LINE;
+                            
+                        }
+                        else
+                        {
+                            bankStates[rank][bank].nextActivate = max(currentClockCycle + WRITE_AUTOPRE_DELAY,
+                                                                      bankStates[rank][bank].nextActivate);
+                            bankStates[rank][bank].lastCommand = WRITE_P;
+                            bankStates[rank][bank].stateChangeCountdown = WRITE_TO_PRE_DELAY;
+
+                        }
                     }
                     else if (poppedBusPacket->busPacketType == WRITE)
                     {
@@ -988,11 +1030,11 @@ void MemoryController::resetStats()
         double threshold;
         if (ENABLE_RESTORE == true)
         {
-            threshold = 0.7;
+            threshold = 0.75;
         }
         else
         {
-            threshold = 0.35;
+            threshold = 0.75;
         }
         //double threshold = 0.01;
         //PRINT("Total open page transactions = " << totalOpenPageTransactions);
@@ -1002,8 +1044,8 @@ void MemoryController::resetStats()
             if (ENABLE_HYBRID_SATURATING_COUNTER == false)
             {
                 totalNumberOfPhases++;
-                unsigned numberOfPhasesInOpenPageForAllBanks = 0;
-                unsigned numberOfPhasesInClosePageForAllBanks = 0;
+                //unsigned numberOfPhasesInOpenPageForAllBanks = 0;
+                //unsigned numberOfPhasesInClosePageForAllBanks = 0;
 
                 PRINT("Threshold = " << threshold);
                 
@@ -1036,6 +1078,9 @@ void MemoryController::resetStats()
                             commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
                             PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
                             
+                            //numberOfPhasesInOpenPageForAllBanks += distributedNumberOfPhasesInOpenPage[i][j];
+                            numberOfPhasesInOpenPageForAllBanks ++;
+
                         }
                         else
                         {
@@ -1050,12 +1095,12 @@ void MemoryController::resetStats()
                             commandQueue.switchedToClosePage[i][j] = true;
                             PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
                             
+
                         }
                         
                         //PRINT("Number of phases in close page [" << i << "][" << j << "] is Close Page = " <<   distributedNumberOfPhasesInClosePage[i][j]);
                         
                         distributedFractionOfClosePage[i][j] = (double) distributedNumberOfPhasesInClosePage[i][j]/ (double)
-                        totalNumberOfPhases;
                         
                         /*
                          PRINT("Number of Open Page Switching bank["<< i << "][" << j << "] = " <<distributedNumberOfPhasesInOpenPage[i][j])
@@ -1065,21 +1110,27 @@ void MemoryController::resetStats()
                          PRINT("Fraction of Close Page bank["<< i << "][" << j << "] = " << distributedFractionOfClosePage[i][j]);
                          */
                         
-                        numberOfPhasesInOpenPageForAllBanks += distributedNumberOfPhasesInOpenPage[i][j];
-                        numberOfPhasesInClosePageForAllBanks += distributedNumberOfPhasesInClosePage[i][j];
+                        //numberOfPhasesInClosePageForAllBanks += distributedNumberOfPhasesInClosePage[i][j];
+                        numberOfPhasesInClosePageForAllBanks++;
 
                     }
                 }
                 distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
                 distributedAverageNumberOfClosePageSwitching = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS);
-                
-                distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
-                distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+                double totalPhaseSwitching = distributedAverageNumberOfOpenPageSwitching + distributedAverageNumberOfClosePageSwitching;
+                //distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+                distributedAverageFractionOfOpenPage = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS * totalPhaseSwitching);
+
+                //distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalNumberOfPhases);
+                distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalPhaseSwitching);
+
                 
                 
                 PRINT(" ");
                 PRINT("Fraction of close page = " << distributedAverageFractionOfClosePage);
+                //PRINT("Fraction of close page = " << (double) numberOfPhasesInClosePageForAllBanks);
                 PRINT("Fraction of open page = " << distributedAverageFractionOfOpenPage);
+                //PRINT("Fraction of open page = " << (double) numberOfPhasesInOpenPageForAllBanks);
                 PRINT("Total number of phases = " << totalNumberOfPhases);
                 PRINT(" ");
                 PRINT("Frequency of close page = " << distributedAverageNumberOfClosePageSwitching);
