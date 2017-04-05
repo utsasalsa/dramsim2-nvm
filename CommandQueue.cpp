@@ -1776,10 +1776,7 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 		{
             /*
             if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
-            {
-                //rowIdleForClosePagePolicy = true;
-                rowIdleProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
-            }
+            
             else if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive && busPacket->row != bankStates[busPacket->rank][busPacket->bank].openRowAddress)
             {
                 readWriteRowActiveProblemForClosePagePolicy[busPacket->rank][busPacket->bank] = true;
@@ -1790,13 +1787,13 @@ bool CommandQueue::isIssuable(BusPacket *busPacket)
 		break;
 	case READ_P:
 	case READ:
-        //PRINT("Read rank/bank " << busPacket->rank << "/" << busPacket->bank);
+            //PRINT("Read rank/bank " << busPacket->rank << "/" << busPacket->bank);
             /*
-            if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
-            {
-                rowIdleForClosePagePolicy = true;
-            }
-            */
+             if (bankRowBufferPolicy[busPacket->rank][busPacket->bank] == ClosePage && bankStates[busPacket->rank][busPacket->bank].currentBankState == Idle)
+             {
+             rowIdleForClosePagePolicy = true;
+             }
+             */
             
             if (bankStates[busPacket->rank][busPacket->bank].currentBankState == RowActive)
             {
