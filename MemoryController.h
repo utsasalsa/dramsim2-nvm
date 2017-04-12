@@ -149,6 +149,7 @@ private:
     double distributedAverageFractionOfOpenPage;
     double distributedAverageFractionOfClosePage;
     
+    
     vector< vector<unsigned> > distributedNumberOfOpenPageSwitching;
     vector< vector<unsigned> > distributedNumberOfClosePageSwitching;
     vector< vector<unsigned> > distributedNumberOfPhasesInOpenPage;
