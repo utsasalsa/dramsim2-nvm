@@ -142,7 +142,6 @@ private:
     unsigned pagePolicyCorrectPredictionCounter;
     double pagePolicyPredictionAccuracy;
     
-    
     unsigned numberOfPhasesInOpenPageForAllBanks;
     unsigned numberOfPhasesInClosePageForAllBanks;
     double distributedAverageNumberOfOpenPageSwitching;
