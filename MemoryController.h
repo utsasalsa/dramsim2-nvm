@@ -123,7 +123,6 @@ private:
 	unsigned colBitWidth;
 	unsigned byteOffsetWidth;
 
-
 	unsigned refreshRank;
     bool prechargeFlag;
     
