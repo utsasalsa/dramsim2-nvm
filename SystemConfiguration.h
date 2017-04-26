@@ -162,6 +162,7 @@ extern bool HYBRID_PAGE_POLICY_FLAG;
 extern bool DISTRIBUTED_PAGE_POLICY_FLAG;
 extern bool FIFO_OPEN_PAGE_SCHEDULING;
 extern bool ENABLE_HYBRID_SATURATING_COUNTER;
+extern bool ORACLE;
 
 enum TraceType
 {

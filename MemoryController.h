@@ -171,6 +171,9 @@ public:
 	vector< double > burstEnergy;
 	vector< double > actpreEnergy;
 	vector< double > refreshEnergy;
+    
+    // Oracle implementation
+    vector< vector<uint64_t> > cycleOfLastFinishedCommand;
 
 };
 }

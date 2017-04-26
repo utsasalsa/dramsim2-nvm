@@ -90,7 +90,10 @@ public:
     vector< vector<BusPacket *> > previousPacketsArray;
     vector< vector<bool> > switchedToClosePage;
     vector< vector<bool> > openPageRestoreDone;
-
+    
+    // Oracle implementation
+    vector< vector<uint64_t> > cycleOfRowConflict;
+    vector< vector<bool> > rowConflictHappened;
 
 private:
 	void nextRankAndBank(unsigned &rank, unsigned &bank);

@@ -127,7 +127,9 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
     openPageRestoreDone = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
     unifiedSaturatingCounter = 0;
     distributedSaturatingCounter = vector< vector<unsigned> >(NUM_RANKS, vector<unsigned>(NUM_BANKS,3));
-
+    
+    cycleOfRowConflict = vector< vector<uint64_t> > (NUM_RANKS, vector<uint64_t>(NUM_BANKS, 0));
+    rowConflictHappened = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
 
 }
 CommandQueue::~CommandQueue()
@@ -538,6 +540,16 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 //PRINT("");
                                 hit(*busPacket);
                                 bankAccess(*busPacket);
+                                
+                                // Oracle implementation
+                                if (ORACLE == true)
+                                {
+                                    if (rowConflictHappened[(*busPacket)->rank][(*busPacket)->bank] == true)
+                                    {
+                                        cycleOfRowConflict[(*busPacket)->rank][(*busPacket)->bank] = currentClockCycle;
+                                        rowConflictHappened[(*busPacket)->rank][(*busPacket)->bank] = false;
+                                    }
+                                }
                                 //if the bus packet before is an activate, that is the act that was
                                 //	paired with the column access we are removing, so we have to remove
                                 //	that activate as well (check i>0 because if i==0 then theres nothing before it)
@@ -685,6 +697,10 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                                 
                                                 if (openPageRestoreDone[nextRankPRE][nextBankPRE] == false)
                                                 {
+                                                    if (!found)//Oracle implementaion
+                                                    {
+                                                        rowConflictHappened[nextRankPRE][nextBankPRE] = true;
+                                                    }
                                                     
                                                     sendingPRE = false;
                                                     delete *busPacket;
@@ -709,6 +725,13 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                             {
                                                 PRINT("bank state : " << bankStates[nextRankPRE][nextBankPRE].currentBankState);
                                                 break;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (!found)
+                                            {
+                                                rowConflictHappened[nextRankPRE][nextBankPRE] = true;
                                             }
                                         }
                                         
@@ -1300,6 +1323,16 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     *busPacket = packet;
                                     hit(*busPacket);
                                     bankAccess(*busPacket);
+                                    
+                                    // Oracle implementation
+                                    if (ORACLE == true)
+                                    {
+                                        if (rowConflictHappened[(*busPacket)->rank][(*busPacket)->bank])
+                                        {
+                                            cycleOfRowConflict[(*busPacket)->rank][(*busPacket)->bank] = currentClockCycle;
+                                            rowConflictHappened[(*busPacket)->rank][(*busPacket)->bank] = false;
+                                        }
+                                    }
                                     //if the bus packet before is an activate, that is the act that was
                                     //	paired with the column access we are removing, so we have to remove
                                     //	that activate as well (check i>0 because if i==0 then theres nothing before it)
@@ -1448,6 +1481,10 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                                 
                                                 if (openPageRestoreDone[nextRankPRE][nextBankPRE] == false)
                                                 {
+                                                    if (!found)// Oracle implementation
+                                                    {
+                                                        rowConflictHappened[nextRankPRE][nextBankPRE] = true;
+                                                    }
                                                     
                                                     sendingPRE = false;
                                                     delete *busPacket;
@@ -1473,7 +1510,13 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                                 break;
                                             }
                                         }
-                                        
+                                        else
+                                        {
+                                            if (!found)
+                                            {
+                                                rowConflictHappened[nextRankPRE][nextBankPRE] = true;
+                                            }
+                                        }
                                         rowAccessCounters[nextRankPRE][nextBankPRE] = 0;
                                         break;
                                     }

@@ -154,6 +154,8 @@ numberOfPhasesInOpenPageForAllBanks(0)
     writeRestoreDoneForOpenPage = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
     firstRankBankTransaction = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, true));
     
+    cycleOfLastFinishedCommand = vector< vector<uint64_t> > (NUM_RANKS, vector<uint64_t> (NUM_BANKS, 0));
+    
 }
 
 //get a bus packet from either data or cmd bus
@@ -444,6 +446,35 @@ void MemoryController::update()
         //for readability's sake
         unsigned rank = poppedBusPacket->rank;
         unsigned bank = poppedBusPacket->bank;
+        
+        // Oracle implementation
+        int rowPrechargePenalty = 0;
+        
+        if (ORACLE == true)
+        {
+            int64_t rowConflictPenalty = 0;
+            rowConflictPenalty = commandQueue.cycleOfRowConflict[rank][bank] - cycleOfLastFinishedCommand[rank][bank];
+            
+            //PRINT("cycle of row conflict: " << commandQueue.cycleOfRowConflict[rank][bank]);
+            //PRINT("cycle of last finished command: " << cycleOfLastFinishedCommand[rank][bank]);
+            //PRINT("row conflict penalty: " << rowConflictPenalty);
+            
+            if (ENABLE_RESTORE == true)
+            {
+                rowPrechargePenalty = (int) rowConflictPenalty - (WRITE_RESTORE_PAGE + tRP);
+            }
+            else
+            {
+                rowPrechargePenalty = (int) rowConflictPenalty - tRP;
+            }
+            //PRINT("row precharge penalty: " << rowPrechargePenalty);
+            if (rowPrechargePenalty < 0)
+            {
+                rowPrechargePenalty = 0;
+            }
+        }
+         
+        
         switch (poppedBusPacket->busPacketType)
         {
             case READ_P:
@@ -465,10 +496,40 @@ void MemoryController::update()
                 }
                 else if (poppedBusPacket->busPacketType == READ)
                 {
+                    
+                    if (ORACLE == true)
+                    {
+                        uint64_t commandDelay = max(currentClockCycle + READ_TO_PRE_DELAY, bankStates[rank][bank].nextPrecharge) - rowPrechargePenalty;
+                        
+                        
+                        if (commandDelay <= currentClockCycle)
+                        {
+                            commandDelay = currentClockCycle + 1;
+                        }
+                        
+                        bankStates[rank][bank].nextPrecharge = commandDelay;
+                        
+                        //PRINT("command delay: " << commandDelay);
+                        //PRINT("read to pre delay: " << READ_TO_PRE_DELAY);
+                        //PRINT("row precharge penalty: " << rowPrechargePenalty);
+                        
+                        //cycleOfLastFinishedCommand[rank][bank] = bankStates[rank][bank].nextPrecharge;
+                        //commandQueue.cycleOfRowConflict[rank][bank] = bankStates[rank][bank].nextPrecharge;
+                        
+                        bankStates[rank][bank].lastCommand = READ;
+                    }
+                    else
+                    {
+                        bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
+                                                                   bankStates[rank][bank].nextPrecharge);
+                        bankStates[rank][bank].lastCommand = READ;
+                    }
+                    
+                    /*
                     bankStates[rank][bank].nextPrecharge = max(currentClockCycle + READ_TO_PRE_DELAY,
                                                                bankStates[rank][bank].nextPrecharge);
                     bankStates[rank][bank].lastCommand = READ;
-                    
+                    */
                 }
                 
                 for (size_t i=0;i<NUM_RANKS;i++)
@@ -477,24 +538,96 @@ void MemoryController::update()
                     {
                         if (i!=poppedBusPacket->rank)
                         {
+                            /*
+                            if (ORACLE == true && poppedBusPacket->busPacketType == READ)
+                            {
+                                if (bankStates[i][j].currentBankState == RowActive)
+                                {
+                                    uint64_t commandDelayNextRead = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextRead) - rowPrechargePenalty;
+                                    
+                                    uint64_t commandDelayNextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY_R, bankStates[i][j].nextWrite) -  rowPrechargePenalty;
+                                    
+                                    
+                                    // next read in different rank
+                                    if (commandDelayNextRead <= currentClockCycle)
+                                    {
+                                        commandDelayNextRead = currentClockCycle + 1;
+                                    }
+                                    
+                                    bankStates[i][j].nextRead = commandDelayNextRead;
+                                    
+                                    // next write in different rank
+                                    if (commandDelayNextWrite <= currentClockCycle)
+                                    {
+                                        commandDelayNextWrite = currentClockCycle + 1;
+                                    }
+                                    
+                                    bankStates[i][j].nextWrite = commandDelayNextWrite;
+                                }
+                            }
+                            else
+                            {
+                                //check to make sure it is active before trying to set (save's time?)
+                                if (bankStates[i][j].currentBankState == RowActive)
+                                {
+                                    bankStates[i][j].nextRead = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextRead);
+                                    bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY_R,
+                                                                     bankStates[i][j].nextWrite);
+                                    
+                                }
+                            }
+                            */
+                            
                             //check to make sure it is active before trying to set (save's time?)
                             if (bankStates[i][j].currentBankState == RowActive)
                             {
                                 bankStates[i][j].nextRead = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextRead);
-                                /*
-                                bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY,
-                                                                 bankStates[i][j].nextWrite);
-                                */
                                 bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY_R,
                                                                  bankStates[i][j].nextWrite);
-
+                                
                             }
+                            
+                            
                         }
                         else
                         {
+                            /*
+                            if (ORACLE == true && poppedBusPacket->busPacketType == READ)
+                            {
+                                uint64_t commandDelayNextRead = max(currentClockCycle + max(tCCD, BL/2), bankStates[i][j].nextRead) - rowPrechargePenalty;
+                                
+                                uint64_t commandDelayNextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY_B, bankStates[i][j].nextWrite) - rowPrechargePenalty;
+                                
+                                
+                                // next read in the same bank
+                                if (commandDelayNextRead <= currentClockCycle)
+                                {
+                                    commandDelayNextRead = currentClockCycle + 1;
+                                }
+                                
+                                bankStates[i][j].nextRead = commandDelayNextRead;
+                                
+                                // next write in the same bank
+                                if (commandDelayNextWrite <= currentClockCycle)
+                                {
+                                    commandDelayNextWrite = currentClockCycle + 1;
+                                }
+                                
+                                bankStates[i][j].nextWrite = commandDelayNextWrite;
+                            }
+                            else
+                            {
+                                bankStates[i][j].nextRead = max(currentClockCycle + max(tCCD, BL/2), bankStates[i][j].nextRead);
+                                bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY_B,
+                                                                 bankStates[i][j].nextWrite);
+                            }
+                            */
+                            
                             bankStates[i][j].nextRead = max(currentClockCycle + max(tCCD, BL/2), bankStates[i][j].nextRead);
                             bankStates[i][j].nextWrite = max(currentClockCycle + READ_TO_WRITE_DELAY_B,
                                                              bankStates[i][j].nextWrite);
+                            
+                            
 
                         }
                     }
@@ -537,9 +670,39 @@ void MemoryController::update()
                     }
                     else if (poppedBusPacket->busPacketType == WRITE)
                     {
+                        
+                        if (ORACLE == true)
+                        {
+                            // Oracle implementation
+                            uint64_t commandDelay = max(currentClockCycle + WRITE_TO_PRE_DELAY, bankStates[rank][bank].nextPrecharge) - rowPrechargePenalty;
+                            
+                            if (commandDelay <= currentClockCycle)
+                            {
+                                commandDelay = currentClockCycle + 1;
+                            }
+                            
+                            bankStates[rank][bank].nextPrecharge = commandDelay;
+                            
+                            cycleOfLastFinishedCommand[rank][bank] = bankStates[rank][bank].nextPrecharge;
+                            
+                            commandQueue.cycleOfRowConflict[rank][bank] = bankStates[rank][bank].nextPrecharge;
+                            
+                            bankStates[rank][bank].lastCommand = WRITE;
+                            
+                        }
+                        else
+                        {
+                            bankStates[rank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
+                                                                       bankStates[rank][bank].nextPrecharge);
+                            bankStates[rank][bank].lastCommand = WRITE;
+                            
+                        }
+                        
+                        /*
                         bankStates[rank][bank].nextPrecharge = max(currentClockCycle + WRITE_TO_PRE_DELAY,
                                                                    bankStates[rank][bank].nextPrecharge);
                         bankStates[rank][bank].lastCommand = WRITE;
+                        */
                     }
                 
                 //add energy to account for total
@@ -557,16 +720,82 @@ void MemoryController::update()
                         {
                             if (bankStates[i][j].currentBankState == RowActive)
                             {
+                                /*
+                                if (ORACLE == true && poppedBusPacket->busPacketType == WRITE)
+                                {
+                                    uint64_t commandDelayNextWrite = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextWrite) - rowPrechargePenalty;
+                                    
+                                    uint64_t commandDelayNextRead = max(currentClockCycle + WRITE_TO_READ_DELAY_R, bankStates[i][j].nextRead) - currentClockCycle - rowPrechargePenalty;
+                                    
+                                    // next write in different rank
+                                    if (commandDelayNextWrite <= currentClockCycle)
+                                    {
+                                        commandDelayNextWrite = currentClockCycle + 1;
+                                    }
+                                    
+                                    bankStates[i][j].nextWrite = commandDelayNextWrite;
+                                    
+                                    //next read in different rank
+                                    if (commandDelayNextRead <= currentClockCycle)
+                                    {
+                                        commandDelayNextRead = currentClockCycle + 1;
+                                    }
+                                    
+                                    bankStates[i][j].nextRead = commandDelayNextRead;
+                                    
+                                }
+                                else
+                                {
+                                    bankStates[i][j].nextWrite = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextWrite);
+                                    bankStates[i][j].nextRead = max(currentClockCycle + WRITE_TO_READ_DELAY_R,
+                                                                    bankStates[i][j].nextRead);
+                                }
+                                */
+                                
                                 bankStates[i][j].nextWrite = max(currentClockCycle + BL/2 + tRTRS, bankStates[i][j].nextWrite);
                                 bankStates[i][j].nextRead = max(currentClockCycle + WRITE_TO_READ_DELAY_R,
                                                                 bankStates[i][j].nextRead);
+                                
                             }
                         }
                         else
                         {
+                            /*
+                            if (ORACLE == true && poppedBusPacket->busPacketType == WRITE)
+                            {
+                                uint64_t commandDelayNextWrite = max(currentClockCycle + max(BL/2, tCCD), bankStates[i][j].nextWrite) - rowPrechargePenalty;
+                                
+                                uint64_t commandDelayNextRead = max(currentClockCycle + WRITE_TO_READ_DELAY_B, bankStates[i][j].nextRead) - rowPrechargePenalty;
+                                
+                                
+                                // next write in the same rank
+                                if (commandDelayNextWrite <= currentClockCycle)
+                                {
+                                    commandDelayNextWrite = currentClockCycle + 2;
+                                }
+                                
+                                bankStates[i][j].nextWrite = commandDelayNextWrite;
+                                
+                                // next read in the same rank
+                                if (commandDelayNextRead <= currentClockCycle)
+                                {
+                                    commandDelayNextRead = currentClockCycle + 2;
+                                }
+                                
+                                bankStates[i][j].nextRead = commandDelayNextRead;
+                            }
+                            else
+                            {
+                                bankStates[i][j].nextWrite = max(currentClockCycle + max(BL/2, tCCD), bankStates[i][j].nextWrite);
+                                bankStates[i][j].nextRead = max(currentClockCycle + WRITE_TO_READ_DELAY_B,
+                                                                bankStates[i][j].nextRead);
+                            }
+                            */
+                            
                             bankStates[i][j].nextWrite = max(currentClockCycle + max(BL/2, tCCD), bankStates[i][j].nextWrite);
                             bankStates[i][j].nextRead = max(currentClockCycle + WRITE_TO_READ_DELAY_B,
                                                             bankStates[i][j].nextRead);
+                            
                         }
                     }
                 }

@@ -302,6 +302,12 @@ void MultiChannelMemorySystem::InitOutputFiles(vector<string> traceFileNameArray
                 ROW_BUFFER_POLICY = "hybridPage";
             }
             
+            string enable_oracle = "";
+            if (ORACLE == true)
+            {
+                enable_oracle = "oracle";
+            }
+            
             string pagePolicyDistribution = "";
             if (HYBRID_PAGE_POLICY_FLAG)
             {
@@ -323,7 +329,7 @@ void MultiChannelMemorySystem::InitOutputFiles(vector<string> traceFileNameArray
             }
             
 			/* I really don't see how "the C++ way" is better than snprintf()  */
-			out << (TOTAL_STORAGE>>10) << "GB." << NUM_CHANS << "Ch." << NUM_RANKS <<"R." <<ADDRESS_MAPPING_SCHEME<<"." << pagePolicyDistribution << "."<<ROW_BUFFER_POLICY<<"."<<restore<<"."<< TRANS_QUEUE_DEPTH<<"TQ."<<CMD_QUEUE_DEPTH<<"CQ."<<sched<<"."<<queue;
+			out << (TOTAL_STORAGE>>10) << "GB." << NUM_CHANS << "Ch." << NUM_RANKS <<"R." <<ADDRESS_MAPPING_SCHEME<<"." << pagePolicyDistribution << "."<<ROW_BUFFER_POLICY<<"."<<restore<<"." << enable_oracle << "." << TRANS_QUEUE_DEPTH<<"TQ."<<CMD_QUEUE_DEPTH<<"CQ."<<sched<<"."<<queue;
 		}
 		else //visFilename given
 		{
