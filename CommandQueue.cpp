@@ -119,9 +119,7 @@ CommandQueue::CommandQueue(vector< vector<BankState> > &states, ostream &dramsim
 		//init the empty vectors here so we don't seg fault later
 		tFAWCountdown.push_back(vector<unsigned>());
 	}
-    previousPacket = NULL;
-    //previousPacketsArray = vector< vector<BusPacket> >(NUM_RANKS, vector<BusPacket>(NUM_BANKS,*new BusPacket()));
-    previousPacketsArray = vector< vector<BusPacket *> >(NUM_RANKS, vector<BusPacket *>(NUM_BANKS,NULL));
+    previousPacketsArray = vector< vector<BusPacket *> >(NUM_RANKS, vector<BusPacket *>(NUM_BANKS, new BusPacket(PRECHARGE, 0, 0, 0, 0, 0, 0, dramsim_log)));
     
     switchedToClosePage = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
     openPageRestoreDone = vector< vector<bool> > (NUM_RANKS, vector<bool> (NUM_BANKS, false));
@@ -199,6 +197,10 @@ void CommandQueue::enqueue(BusPacket *newBusPacket)
 //command scheduling policy
 bool CommandQueue::pop(BusPacket **busPacket)
 {
+    if (REFRESH_PERIOD >= 999999)
+    {
+        refreshWaiting = false;
+    }
 	//this can be done here because pop() is called every clock cycle by the parent MemoryController
 	//	figures out the sliding window requirement for tFAW
 	//
@@ -218,7 +220,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
 			tFAWCountdown[i].erase(tFAWCountdown[i].begin());
 		}
 	}
-
 	/* Now we need to find a packet to issue. When the code picks a packet, it will set
 		 *busPacket = [some eligible packet]
 		 
@@ -231,6 +232,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
         unsigned startingRank = nextRank;
         unsigned startingBank = nextBank;
         bool foundIssuable = false;
+        refreshWaiting = false;
         do
         {
             
@@ -265,6 +267,7 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     //check to make sure we aren't removing a read/write that is paired with an activate
                                     if (i>0 && queue[i-1]->busPacketType==ACTIVATE &&
                                         queue[i-1]->physicalAddress == queue[i]->physicalAddress)
+                                    
                                         continue;
                                         
                                     *busPacket = queue[i];
@@ -302,75 +305,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                 queue.erase(queue.begin());
                                 foundIssuable = true;
                             }
-                            /*
-                            else
-                            {
-                                if (switchedToClosePage[queue[0]->rank][queue[0]->bank] && bankStates[queue[0]->rank][queue[0]->bank].lastCommand != ACTIVATE)
-                                //if (switchedToClosePage[queue[0]->rank][queue[0]->bank])
-                                {
-                                    BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
-                                                                          queue[0]->column, bankStates[queue[0]->rank][queue[0]->bank].openRowAddress, queue[0]->rank,
-                                                                          queue[0]->bank, 0, dramsim_log);
-                                    if (isIssuable(PreCommand))
-                                    {
-                                        //PRINT("Activate packet is popped");
-                                        *busPacket = PreCommand;
-                                        switchedToClosePage[queue[0]->rank][queue[0]->bank] = false;
-                                        foundIssuable = true;
-                                    }
-                                }
-                                //if (rowIdleForClosePagePolicy)
-                                else if (rowIdleProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
-                                {
-                                    //PRINT("row idle problem");
-                                    BusPacket *ACTcommand = new BusPacket(ACTIVATE, queue[0]->physicalAddress,
-                                                                          queue[0]->column, queue[0]->row, queue[0]->rank,
-                                                                          queue[0]->bank, 0, dramsim_log);
-                                    if (isIssuable(ACTcommand))
-                                    {
-                                        //PRINT("Activate packet is popped");
-                                        *busPacket = ACTcommand;
-                                        //rowIdleForClosePagePolicy = false;
-                                        rowIdleProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
-                                        foundIssuable = true;
-                                    }
-                                }
-                                
-                                //else if (rowActiveForClosePagePolicy)
-                                else if (rowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
-                                {
-                                    //PRINT("bank precharged");
-                                    BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
-                                                                          queue[0]->column, bankStates[queue[0]->rank][queue[0]->bank].openRowAddress, queue[0]->rank,
-                                                                          queue[0]->bank, 0, dramsim_log);
-                                    if (isIssuable(PreCommand))
-                                    {
-                                        *busPacket = PreCommand;
-                                        //rowActiveForClosePagePolicy = false;
-                                        rowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
-                                        foundIssuable = true;
-                                    }
-                                    
-                                }
-                                
-                                else if (readWriteRowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] == true)
-                                {
-
-                                    
-                                    BusPacket *PreCommand = new BusPacket(PRECHARGE, queue[0]->physicalAddress,
-                                                                          queue[0]->column, bankStates[queue[0]->rank][queue[0]->bank].openRowAddress, queue[0]->rank,
-                                                                          queue[0]->bank, 0, dramsim_log);
-                                    if (isIssuable(PreCommand))
-                                    {
-                                        *busPacket = PreCommand;
-                                        //rowActiveForClosePagePolicy = false;
-                                        readWriteRowActiveProblemForClosePagePolicy[queue[0]->rank][queue[0]->bank] = false;
-                                        foundIssuable = true;
-                                    }
-                                    
-                                }
-                            }
-                            */
                         }
                         
                         if (foundIssuable == false)
@@ -409,7 +343,6 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                                 }
                                                 //else if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge && bankStates[nextRank][nextBank].lastCommand != ACTIVATE)
                                                 else if (currentClockCycle >= bankStates[nextRank][nextBank].nextPrecharge)
-                                                    
                                                 {
                                                     //PRINT("precharge row");
                                                     *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRank, nextBank, 0, dramsim_log);
@@ -432,6 +365,23 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                         openPageRestoreDone[nextRank][nextBank] = true;
                                         foundIssuable = true;
                                     }
+                                    /*
+                                    else if (bankStates[nextRank][nextBank].currentBankState == Idle && bankStates[nextRank][nextBank].lastCommand == PRECHARGE && queue[0]->busPacketType == ACTIVATE)
+                                    {
+                                        //PRINT("hello");
+                                        queue.erase(queue.begin());
+                                        *busPacket = new BusPacket(ACTIVATE, 0, 0, queue[0]->row, queue[0]->rank, queue[0]->bank, 0, dramsim_log);
+                                        openPageRestoreDone[nextRank][nextBank] = true;
+                                        foundIssuable = true;
+                                    }
+                                     */
+                                    /*
+                                    else if (bankStates[queue[0]->rank][queue[0]->bank].currentBankState == Idle && bankStates[queue[0]->rank][queue[0]->bank].lastCommand == PRECHARGE && queue[0]->busPacketType == ACTIVATE && tFAWCountdown[nextRank][nextBank] == 3)
+                                    {
+                                        tFAWCountdown[nextRank][nextBank]--;
+                                    }
+                                     */
+                                    
                                 }
                                 
                                 else
@@ -450,7 +400,8 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                             
                                         {
                                             //PRINT("precharge row");
-                                            *busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRank, nextBank, 0, dramsim_log);
+                                            //*busPacket = new BusPacket(PRECHARGE, 0, 0, 0, nextRank, nextBank, 0, dramsim_log);
+                                            *busPacket = new BusPacket(PRECHARGE, 0, 0, bankStates[nextRank][nextBank].openRowAddress, nextRank, nextBank, 0, dramsim_log);
                                             
                                             foundIssuable = true;
                                             
@@ -462,6 +413,16 @@ bool CommandQueue::pop(BusPacket **busPacket)
                                     {
                                         queue.erase(queue.begin());
                                     }
+                                    /*
+                                    else if (bankStates[nextRank][nextBank].currentBankState == Idle && (queue[0]->busPacketType == READ || queue[0]->busPacketType == READ_P || queue[0]->busPacketType == WRITE || queue[0]->busPacketType == WRITE_P) && currentClockCycle >= bankStates[nextRank][nextBank].nextActivate)
+                                    //else if (bankStates[queue[0]->rank][queue[0]->bank].currentBankState == 0 && bankStates[queue[0]->rank][queue[0]->bank].lastCommand == 5 && queue[0]->busPacketType == 5)
+                                    {
+                                        //PRINT("hello");
+                                        *busPacket = new BusPacket(ACTIVATE, 0, 0, queue[0]->row, queue[0]->rank, queue[0]->bank, 0, dramsim_log);
+                                        //openPageRestoreDone[nextRank][nextBank] = true;
+                                        foundIssuable = true;
+                                    }
+                                     */
                                 }
                             }
                         }

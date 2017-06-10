@@ -174,6 +174,8 @@ public:
     
     // Oracle implementation
     vector< vector<uint64_t> > cycleOfLastFinishedCommand;
+    u_int64_t totalRowConflictPenalty;
+    u_int64_t totalRowConflictUnhiddenCost;
 
 };
 }

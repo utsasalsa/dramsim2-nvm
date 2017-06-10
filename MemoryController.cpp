@@ -85,7 +85,9 @@ pagePolicyPredictionAccuracy(0),
 totalClosePageTransactions(0),
 totalOpenPageTransactions(0),
 numberOfPhasesInClosePageForAllBanks(0),
-numberOfPhasesInOpenPageForAllBanks(0)
+numberOfPhasesInOpenPageForAllBanks(0),
+totalRowConflictPenalty(0),
+totalRowConflictUnhiddenCost(0)
 {
     //get handle on parent
     parentMemorySystem = parent;
@@ -454,6 +456,7 @@ void MemoryController::update()
         {
             int64_t rowConflictPenalty = 0;
             rowConflictPenalty = commandQueue.cycleOfRowConflict[rank][bank] - cycleOfLastFinishedCommand[rank][bank];
+            //totalRowConflictPenalty = totalRowConflictPenalty + rowConflictPenalty;
             
             //PRINT("cycle of row conflict: " << commandQueue.cycleOfRowConflict[rank][bank]);
             //PRINT("cycle of last finished command: " << cycleOfLastFinishedCommand[rank][bank]);
@@ -472,6 +475,7 @@ void MemoryController::update()
             {
                 rowPrechargePenalty = 0;
             }
+            totalRowConflictPenalty = totalRowConflictPenalty + rowPrechargePenalty;
         }
          
         
@@ -508,6 +512,8 @@ void MemoryController::update()
                         }
                         
                         bankStates[rank][bank].nextPrecharge = commandDelay;
+                        
+                        totalRowConflictUnhiddenCost = totalRowConflictUnhiddenCost + (commandDelay - currentClockCycle);
                         
                         //PRINT("command delay: " << commandDelay);
                         //PRINT("read to pre delay: " << READ_TO_PRE_DELAY);
@@ -682,6 +688,8 @@ void MemoryController::update()
                             }
                             
                             bankStates[rank][bank].nextPrecharge = commandDelay;
+                            
+                            totalRowConflictUnhiddenCost = totalRowConflictUnhiddenCost + (commandDelay - currentClockCycle);
                             
                             cycleOfLastFinishedCommand[rank][bank] = bankStates[rank][bank].nextPrecharge;
                             
@@ -880,7 +888,7 @@ void MemoryController::update()
                 bankStates[rank][bank].lastCommand = PRECHARGE;
                 bankStates[rank][bank].stateChangeCountdown = tRP;
                 bankStates[rank][bank].nextActivate = max(currentClockCycle + tRP, bankStates[rank][bank].nextActivate);
-                
+                bankStates[rank][bank].openRowAddress = 0;
                 break;
             case REFRESH:
                 //add energy to account for total
@@ -1285,12 +1293,31 @@ void MemoryController::resetStats()
                         //PRINT("commandQueue.bankHitCounters = " << (double)commandQueue.bankHitCounters[i][j]);
                         //PRINT("commandQueue.bankAccessCounters = " << (double)commandQueue.bankAccessCounters[i][j]);
                         /*
-                         PRINT("Current bank states "<<bankStates[i][j].currentBankState);
-                         PRINT("last command = " << bankStates[i][j].lastCommand);
-                         PRINT("packet row address: " << poppedBusPacket->row);
-                         PRINT("bank open row address: " << bankStates[i][j].openRowAddress);
-                         PRINT("current command = " << packetType);
-                         */
+                        PRINT("Current bank states "<<bankStates[i][j].currentBankState);
+                        PRINT("last command = " << bankStates[i][j].lastCommand);
+                        
+                        vector<BusPacket *> &queue = commandQueue.getCommandQueue(i, j);
+                        if (queue.size() > 0)
+                        {
+                            
+                            PRINT("size of queue: " << queue.size());
+                            PRINT("current command: " << queue[0]->busPacketType);
+                            PRINT("current command row: " << queue[0]->row);
+                            if (commandQueue.isIssuable(queue[0]))
+                            {
+                                PRINT("packet is issuable");
+                            }
+                            if (commandQueue.tFAWCountdown[queue[0]->rank].size() > 0 )
+                            {
+                                PRINT("tFAW size: " << commandQueue.tFAWCountdown[queue[0]->rank].size());
+                            }
+                        }
+                        
+                        
+                        //PRINT("packet row address: " << poppedBusPacket->row);
+                        PRINT("bank open row address: " << bankStates[i][j].openRowAddress);
+                        //PRINT("current command = " << packetType);
+                        */
                         double hitRate = (double)commandQueue.bankHitCounters[i][j] / (double)commandQueue.bankAccessCounters[i][j];
                         
                         
@@ -1302,14 +1329,14 @@ void MemoryController::resetStats()
                                 distributedNumberOfOpenPageSwitching[i][j]++;
                             }
                             distributedNumberOfPhasesInOpenPage[i][j]++;
-
+                            
                             
                             commandQueue.bankRowBufferPolicy[i][j] = OpenPage;
-                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
+                            //PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Open Page"   );
                             
                             //numberOfPhasesInOpenPageForAllBanks += distributedNumberOfPhasesInOpenPage[i][j];
                             numberOfPhasesInOpenPageForAllBanks ++;
-
+                            
                         }
                         else
                         {
@@ -1319,12 +1346,12 @@ void MemoryController::resetStats()
                                 distributedNumberOfClosePageSwitching[i][j]++;
                             }
                             distributedNumberOfPhasesInClosePage[i][j]++;
-
+                            
                             commandQueue.bankRowBufferPolicy[i][j] = ClosePage;
                             commandQueue.switchedToClosePage[i][j] = true;
-                            PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
+                            //PRINT("Row Buffer Policy of bank[" << i << "][" << j << "] is Close Page"   );
                             
-
+                            
                         }
                         
                         //PRINT("Number of phases in close page [" << i << "][" << j << "] is Close Page = " <<   distributedNumberOfPhasesInClosePage[i][j]);
@@ -1341,7 +1368,7 @@ void MemoryController::resetStats()
                         
                         //numberOfPhasesInClosePageForAllBanks += distributedNumberOfPhasesInClosePage[i][j];
                         numberOfPhasesInClosePageForAllBanks++;
-
+                        
                     }
                 }
                 distributedAverageNumberOfOpenPageSwitching = (double) numberOfPhasesInOpenPageForAllBanks / (NUM_RANKS * NUM_BANKS);
@@ -1354,7 +1381,7 @@ void MemoryController::resetStats()
                 distributedAverageFractionOfClosePage = (double) numberOfPhasesInClosePageForAllBanks / (NUM_RANKS * NUM_BANKS * totalPhaseSwitching);
 
                 
-                
+                /*
                 PRINT(" ");
                 PRINT("Fraction of close page = " << distributedAverageFractionOfClosePage);
                 //PRINT("Fraction of close page = " << (double) numberOfPhasesInClosePageForAllBanks);
@@ -1365,7 +1392,7 @@ void MemoryController::resetStats()
                 PRINT("Frequency of close page = " << distributedAverageNumberOfClosePageSwitching);
                 PRINT("Frequency of open page = " << distributedAverageNumberOfOpenPageSwitching);
                 PRINT(" ");
-
+                */
             }
             
         }
@@ -1458,7 +1485,7 @@ void MemoryController::resetStats()
                 
                 unifiedFractionOfClosePage = (double) numberOfPhasesInClosePage / totalNumberOfPhases;
                 unifiedFractionOfOpenPage = (double) numberOfPhasesInOpenPage / totalNumberOfPhases;
-                
+                /*
                 //pagePolicyPredictionAccuracy = (double) pagePolicyCorrectPredictionCounter / unifiedTotalNumberOfPageSwitching;
                 PRINT(" ");
                 PRINT("Fraction of close page = " << unifiedFractionOfClosePage);
@@ -1467,6 +1494,7 @@ void MemoryController::resetStats()
                 PRINT(" ");
                 PRINT("Frequency of close page = " << numberOfPhasesInClosePage);
                 PRINT("Frequency of open page = " << numberOfPhasesInOpenPage);
+                */
             }
         }
     }
@@ -1576,7 +1604,7 @@ void MemoryController::printStats(bool finalStats)
         
         for (size_t j=0;j<NUM_BANKS;j++)
         {
-            PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
+            //PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
             
             csvOut.getOutputStream() << endl;
             csvOut.getOutputStream() << "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns";
@@ -1591,7 +1619,7 @@ void MemoryController::printStats(bool finalStats)
         refreshPower[r] = ((double) refreshEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
         actprePower[r] = ((double)actpreEnergy[r] / (double)(cyclesElapsed)) * Vdd / 1000.0;
         averagePower[r] = ((backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r]) / (double)cyclesElapsed) * Vdd / 1000.0;
-        
+        /*
         cout << endl;
         cout << "Total Energy       : " << backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r] << endl;
         cout << "Background Energy      : "<< backgroundEnergy[r] << endl;
@@ -1605,18 +1633,19 @@ void MemoryController::printStats(bool finalStats)
         cout << "     -Act/Pre    (watts)     : " << actprePower[r] << endl;
         cout << "     -Burst      (watts)     : " << burstPower[r] << endl;
         cout << "     -Refresh    (watts)     : " << refreshPower[r] << endl;
-        
+        */
         if ((*parentMemorySystem->ReportPower)!=NULL)
         {
             (*parentMemorySystem->ReportPower)(backgroundPower[r],burstPower[r],refreshPower[r],actprePower[r]);
         }
-        
+        /*
         PRINT( " == Power Data for Rank        " << r );
         PRINT( "   Average Power (watts)     : " << averagePower[r] );
         PRINT( "     -Background (watts)     : " << backgroundPower[r] );
         PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
         PRINT( "     -Burst      (watts)     : " << burstPower[r]);
         PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
+        */
         if (VIS_FILE_OUTPUT)
         {
             csvOut.getOutputStream() << endl;
@@ -1635,6 +1664,8 @@ void MemoryController::printStats(bool finalStats)
             csvOut.getOutputStream() << " -Refresh    (watts)=" <<refreshPower[r] <<endl;
             csvOut.getOutputStream() << endl;
             csvOut.getOutputStream() << " Total Number of cylces=" <<currentClockCycle <<endl;
+            csvOut.getOutputStream() << " Total Row Conflict Penalty=" << totalRowConflictPenalty / NUM_BANKS << endl;
+            csvOut.getOutputStream() << " Total Row Conflict Unhidden Cost=" << totalRowConflictUnhiddenCost / NUM_BANKS << endl;
             csvOut.getOutputStream() << endl;
             
             if (HYBRID_PAGE_POLICY_FLAG == true)
